@@ -14,6 +14,7 @@ resource "azurerm_resource_group_template_deployment" "telemetry" {
   resource_group_name = var.resource_group_name
   template_content    = local.telem_arm_template_content
 }
+
 data "azapi_client_config" "telemetry" {
   count = var.enable_telemetry ? 1 : 0
 }
@@ -57,6 +58,7 @@ locals {
   # tflint-ignore: terraform_unused_declarations
   avm_azapi_header = join(" ", [for k, v in local.avm_azapi_headers : "${k}=${v}"])
 }
+
 locals {
   main_location = var.location
 }
@@ -72,4 +74,3 @@ resource "modtm_telemetry" "telemetry" {
     random_id       = one(random_uuid.telemetry).result
   }, { location = local.main_location })
 }
-
