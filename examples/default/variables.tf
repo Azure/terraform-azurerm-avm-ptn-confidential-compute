@@ -1,8 +1,8 @@
 variable "admin_password" {
   type        = string
   description = "Administrator password for the Windows VM. Supply securely at runtime; Terraform stores it in state."
-  sensitive   = true
   nullable    = false
+  sensitive   = true
 
   validation {
     condition = (

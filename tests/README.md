@@ -7,6 +7,7 @@ Run commands from the repository root after importing the module:
 Import-Module Avm.Authoring
 avm test unit
 avm test
+pwsh -NoProfile -File .\tests\ci_admin_password.tests.ps1
 ```
 
 ## Unit coverage
@@ -22,7 +23,8 @@ Provider-mocked Terraform tests live in [unit](unit/):
 - [Data-disk validation](unit/data_disk_validations.tftest.hcl): Duplicate LUNs, backup selection of an undeclared LUN,
   and invalid caching modes are rejected.
 - [Defaults and outputs](unit/defaults_and_outputs.tftest.hcl): Root location/tag defaults and selected output forwarding.
-- [Telemetry location](unit/telemetry_location_validation.tftest.hcl): Missing locations are rejected and a VM-level location can supply telemetry's region.
+- [Telemetry location](unit/telemetry_location_validation.tftest.hcl): The required root region supplies VM defaults
+  and telemetry; VM region overrides do not change telemetry's region.
 - [Windows default example](unit/windows.tftest.hcl): The default example creates its resource group in East US and exercises
   the Windows VM path through the root pattern and real VM submodule with mocked providers.
 
@@ -30,6 +32,11 @@ There are nine test runs across these six files. Root-interface tests override t
 The disk-tag and both Windows-example tests exercise the real module implementation with mocked providers.
 Mocked `apply` does not deploy Azure resources, prove regional SKU
 availability or quota, or verify backup and restore.
+
+The [CI password hook tests](ci_admin_password.tests.ps1) exercise both examples without Azure.
+They verify local no-op behavior, preservation of supplied passwords, valid generated passwords without console output,
+stable inputs across repeated preparation, cleanup, and regeneration after cleanup. Run this PowerShell suite
+separately from `avm test unit`, which discovers only the Terraform tests.
 
 ## Other test tiers
 

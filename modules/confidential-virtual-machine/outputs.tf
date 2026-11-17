@@ -32,11 +32,6 @@ locals {
   }
 }
 
-output "network_interface_resource_ids" {
-  description = "Resource IDs of network interfaces created for confidential virtual machines."
-  value       = { for key, nic in azurerm_network_interface.this : key => nic.id }
-}
-
 output "backup_protected_vm_ids" {
   description = "Resource IDs of Azure Backup protected-item associations for confidential virtual machines."
   value       = { for key, backup in azurerm_backup_protected_vm.this : key => backup.id }
@@ -50,6 +45,11 @@ output "data_disk_attachment_resource_ids" {
 output "data_disk_resource_ids" {
   description = "Resource IDs of managed data disks for confidential virtual machines, grouped by VM key and data-disk key."
   value       = local.confidential_virtual_machine_data_disk_resource_ids_by_vm
+}
+
+output "network_interface_resource_ids" {
+  description = "Resource IDs of network interfaces created for confidential virtual machines."
+  value       = { for key, nic in azurerm_network_interface.this : key => nic.id }
 }
 
 output "resource_ids" {

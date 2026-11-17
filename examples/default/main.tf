@@ -17,6 +17,8 @@ terraform {
   }
 }
 
+provider "azapi" {}
+
 provider "azurerm" {
   features {}
 }
@@ -25,8 +27,8 @@ resource "random_string" "suffix" {
   length  = 6
   lower   = true
   numeric = true
-  upper   = false
   special = false
+  upper   = false
 }
 
 removed {
@@ -41,32 +43,33 @@ module "resource_group" {
   source  = "Azure/avm-res-resources-resourcegroup/azurerm"
   version = "0.5.0"
 
-  enable_telemetry = var.enable_telemetry
   location         = var.location
   name             = var.resource_group_name
+  enable_telemetry = var.enable_telemetry
 }
 
 resource "azurerm_virtual_network" "this" {
-  address_space       = ["10.40.0.0/16"]
   location            = module.resource_group.location
   name                = "vnet-cvm-01"
   resource_group_name = module.resource_group.name
-  depends_on          = [module.resource_group]
+  address_space       = ["10.40.0.0/16"]
+
+  depends_on = [module.resource_group]
 }
 
 resource "azurerm_subnet" "this" {
-  address_prefixes     = ["10.40.1.0/24"]
   name                 = "snet-workload"
   resource_group_name  = module.resource_group.name
   virtual_network_name = azurerm_virtual_network.this.name
-  depends_on           = [azurerm_virtual_network.this]
+  address_prefixes     = ["10.40.1.0/24"]
+
+  depends_on = [azurerm_virtual_network.this]
 }
 
 module "test" {
   source = "../../"
 
-  enable_telemetry = var.enable_telemetry
-  location         = module.resource_group.location
+  location = module.resource_group.location
   confidential_virtual_machines = {
     cvm1 = {
       name                = "test"
@@ -93,5 +96,7 @@ module "test" {
       }
     }
   }
+  enable_telemetry = var.enable_telemetry
+
   depends_on = [azurerm_subnet.this, module.resource_group]
 }

@@ -32,6 +32,7 @@ If the old policy already protects other VMs, preserve their protection and foll
 rather than deleting protected items or recovery points.
 
 Supply `admin_password` securely when prompted or through your secret-management workflow.
+Managed GitHub Actions checks generate a temporary password input when none is supplied; see the [CI password behavior](../README.md#ci-password-behavior).
 The password must contain 12-123 characters and at least three of lowercase letters, uppercase letters, digits, and special characters.
 Regenerate saved plans after configuration changes. Switching an existing Linux VM to Windows requires recreation;
 review the VM and backup-protection changes before applying.
@@ -46,6 +47,10 @@ terraform {
   required_version = ">= 1.9, < 2.0"
 
   required_providers {
+    azapi = {
+      source  = "Azure/azapi"
+      version = "~> 2.12"
+    }
     azurerm = {
       source  = "hashicorp/azurerm"
       version = "~> 4.0"
@@ -57,6 +62,8 @@ terraform {
   }
 }
 
+provider "azapi" {}
+
 provider "azurerm" {
   features {}
 }
@@ -65,8 +72,8 @@ resource "random_string" "suffix" {
   length  = 6
   lower   = true
   numeric = true
-  upper   = false
   special = false
+  upper   = false
 }
 
 module "naming" {
@@ -80,19 +87,21 @@ resource "azurerm_resource_group" "this" {
 }
 
 resource "azurerm_virtual_network" "this" {
-  address_space       = ["10.50.0.0/16"]
   location            = azurerm_resource_group.this.location
   name                = "vnet-cvm-backup-${random_string.suffix.result}"
   resource_group_name = azurerm_resource_group.this.name
-  depends_on          = [azurerm_resource_group.this]
+  address_space       = ["10.50.0.0/16"]
+
+  depends_on = [azurerm_resource_group.this]
 }
 
 resource "azurerm_subnet" "this" {
-  address_prefixes     = ["10.50.1.0/24"]
   name                 = "snet-workload"
   resource_group_name  = azurerm_resource_group.this.name
   virtual_network_name = azurerm_virtual_network.this.name
-  depends_on           = [azurerm_virtual_network.this]
+  address_prefixes     = ["10.50.1.0/24"]
+
+  depends_on = [azurerm_virtual_network.this]
 }
 
 resource "azurerm_recovery_services_vault" "this" {
@@ -100,15 +109,16 @@ resource "azurerm_recovery_services_vault" "this" {
   name                = "rsv-cvm-${random_string.suffix.result}"
   resource_group_name = azurerm_resource_group.this.name
   sku                 = "Standard"
-  depends_on          = [azurerm_resource_group.this]
+
+  depends_on = [azurerm_resource_group.this]
 }
 
 resource "azurerm_backup_policy_vm" "this" {
-  instant_restore_retention_days = 2
   name                           = "daily-backup"
-  policy_type                    = "V2"
-  resource_group_name            = azurerm_resource_group.this.name
   recovery_vault_name            = azurerm_recovery_services_vault.this.name
+  resource_group_name            = azurerm_resource_group.this.name
+  instant_restore_retention_days = 2
+  policy_type                    = "V2"
   timezone                       = "UTC"
 
   backup {
@@ -119,14 +129,14 @@ resource "azurerm_backup_policy_vm" "this" {
   retention_daily {
     count = 7
   }
+
   depends_on = [azurerm_recovery_services_vault.this]
 }
 
 module "test" {
   source = "../../"
 
-  enable_telemetry = var.enable_telemetry
-  location         = azurerm_resource_group.this.location
+  location = azurerm_resource_group.this.location
   confidential_virtual_machines = {
     cvm1 = {
       name                = "cvm-backup-${random_string.suffix.result}"
@@ -150,6 +160,8 @@ module "test" {
       }
     }
   }
+  enable_telemetry = var.enable_telemetry
+
   depends_on = [azurerm_recovery_services_vault.this, azurerm_backup_policy_vm.this]
 }
 ```
@@ -160,6 +172,8 @@ module "test" {
 The following requirements are needed by this module:
 
 - <a name="requirement_terraform"></a> [terraform](#requirement\_terraform) (>= 1.9, < 2.0)
+
+- <a name="requirement_azapi"></a> [azapi](#requirement\_azapi) (~> 2.12)
 
 - <a name="requirement_azurerm"></a> [azurerm](#requirement\_azurerm) (~> 4.0)
 

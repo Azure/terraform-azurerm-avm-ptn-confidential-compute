@@ -30,6 +30,7 @@ If the old policy already protects other VMs, preserve their protection and foll
 rather than deleting protected items or recovery points.
 
 Supply `admin_password` securely when prompted or through your secret-management workflow.
+Managed GitHub Actions checks generate a temporary password input when none is supplied; see the [CI password behavior](../README.md#ci-password-behavior).
 The password must contain 12-123 characters and at least three of lowercase letters, uppercase letters, digits, and special characters.
 Regenerate saved plans after configuration changes. Switching an existing Linux VM to Windows requires recreation;
 review the VM and backup-protection changes before applying.

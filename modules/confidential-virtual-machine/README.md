@@ -29,6 +29,7 @@ Backup outputs contain only protected VMs. Principal IDs are meaningful only for
 
 Telemetry defaults to enabled and requires module-level `location` and subscription-scoped deployment permissions.
 Set `enable_telemetry = false` to disable the empty telemetry deployment; this does not remove per-VM location requirements.
+When telemetry is disabled, the separate telemetry-only module-level `location` may be omitted or null.
 
 <!-- markdownlint-disable MD033 -->
 ## Requirements

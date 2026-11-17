@@ -6,5 +6,5 @@ locals {
     })
   }
 
-  telemetry_location = var.location != null ? var.location : try(values(local.confidential_virtual_machines)[0].location, null)
+  telemetry_location = var.location
 }

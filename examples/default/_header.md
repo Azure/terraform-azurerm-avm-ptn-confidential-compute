@@ -18,6 +18,7 @@ The resource group is created by the example; it does not need to exist beforeha
 The network and VM depend on the resource-group module so creation happens in the required order.
 
 Supply `admin_password` securely when prompted or through your secret-management workflow.
+Managed GitHub Actions checks generate a temporary password input when none is supplied; see the [CI password behavior](../README.md#ci-password-behavior).
 The password must contain 12-123 characters and at least three of lowercase letters, uppercase letters, digits, and special characters.
 After changing this configuration, regenerate any saved Terraform plan before applying it.
 Review the plan for replacements if switching from an earlier Linux deployment or a different region.

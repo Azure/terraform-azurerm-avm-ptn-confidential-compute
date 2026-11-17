@@ -68,7 +68,8 @@ image availability for the selected example. The root module itself does not imp
 
 ## Configuration behavior
 
-- Every VM needs either its own `location` or the root `location`.
+- The root `location` is required and must not be null. It supplies the region for VMs without their own `location`;
+  per-VM overrides remain supported. Both examples supply `eastus` by default.
 - VM-level `tags` replace, rather than merge with, root `tags`. Data-disk tags similarly replace VM tags.
   Tags may be omitted at all levels. An explicit empty disk tags map disables inheritance.
 - A supplied `private_ip_address` forces static allocation. Otherwise allocation defaults to `Dynamic`.
@@ -83,8 +84,8 @@ image availability for the selected example. The root module itself does not imp
 ## Telemetry
 
 Telemetry is enabled by default. Set `enable_telemetry = false` on the module call to disable it in both the root and child module.
-With telemetry enabled, `location` is used for telemetry, falling back to the first VM's resolved location when omitted.
-An empty VM map therefore still requires `location` unless telemetry is disabled.
+The required root `location` supplies telemetry's region even when individual VMs override their deployment region.
+Disabling telemetry does not make the root `location` optional.
 
 Both modules create an empty Azure deployment at the active subscription scope for telemetry.
 The deployment identity needs `Microsoft.Resources/deployments/read`, `write`, and `delete` permissions at that scope.

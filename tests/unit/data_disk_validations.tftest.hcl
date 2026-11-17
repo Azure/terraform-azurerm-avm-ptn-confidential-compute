@@ -1,8 +1,12 @@
-mock_provider "azapi" {}
+mock_provider "azapi" {
+  mock_data "azapi_client_config" {
+    defaults = {
+      subscription_resource_id = "/subscriptions/00000000-0000-0000-0000-000000000000"
+    }
+  }
+}
 
 mock_provider "azurerm" {}
-
-mock_provider "modtm" {}
 
 override_module {
   target = module.confidential_virtual_machine
@@ -72,7 +76,7 @@ run "rejects_duplicate_data_disk_luns" {
   providers = {
     azapi   = azapi
     azurerm = azurerm
-    modtm   = modtm
+
   }
 }
 
@@ -116,7 +120,7 @@ run "rejects_backup_include_lun_not_in_data_disks" {
   providers = {
     azapi   = azapi
     azurerm = azurerm
-    modtm   = modtm
+
   }
 }
 
@@ -155,6 +159,6 @@ run "rejects_invalid_data_disk_caching" {
   providers = {
     azapi   = azapi
     azurerm = azurerm
-    modtm   = modtm
+
   }
 }

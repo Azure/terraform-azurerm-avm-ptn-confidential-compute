@@ -23,12 +23,11 @@ locals {
 resource "azurerm_network_interface" "this" {
   for_each = local.confidential_virtual_machines
 
-  location            = each.value.location
-  name                = coalesce(each.value.network_interface_name, "${each.value.name}-nic")
-  resource_group_name = each.value.resource_group_name
-  tags                = each.value.tags
-
+  location                       = each.value.location
+  name                           = coalesce(each.value.network_interface_name, "${each.value.name}-nic")
+  resource_group_name            = each.value.resource_group_name
   accelerated_networking_enabled = each.value.accelerated_networking_enabled
+  tags                           = each.value.tags
 
   ip_configuration {
     name                          = "ipconfig1"
@@ -42,12 +41,12 @@ resource "azurerm_managed_disk" "data" {
   for_each = local.confidential_virtual_machine_data_disks
 
   create_option          = "Empty"
-  disk_size_gb           = each.value.disk_size_gb
-  disk_encryption_set_id = each.value.disk_encryption_set_id
   location               = each.value.location
   name                   = coalesce(each.value.name, "${each.value.vm_name}-${each.value.disk_key}")
   resource_group_name    = each.value.resource_group_name
   storage_account_type   = each.value.storage_account_type
+  disk_encryption_set_id = each.value.disk_encryption_set_id
+  disk_size_gb           = each.value.disk_size_gb
   tags                   = each.value.tags
   zone                   = each.value.zone
 }
@@ -55,16 +54,16 @@ resource "azurerm_managed_disk" "data" {
 resource "azurerm_linux_virtual_machine" "this" {
   for_each = local.linux_confidential_virtual_machines
 
-  admin_password                  = each.value.admin_password
-  admin_username                  = each.value.admin_username
-  computer_name                   = each.value.computer_name
-  disable_password_authentication = each.value.admin_password == null
   location                        = each.value.location
   name                            = each.value.name
   network_interface_ids           = [azurerm_network_interface.this[each.key].id]
   resource_group_name             = each.value.resource_group_name
-  secure_boot_enabled             = each.value.secure_boot_enabled
   size                            = each.value.size
+  admin_password                  = each.value.admin_password
+  admin_username                  = each.value.admin_username
+  computer_name                   = each.value.computer_name
+  disable_password_authentication = each.value.admin_password == null
+  secure_boot_enabled             = each.value.secure_boot_enabled
   tags                            = each.value.tags
   vtpm_enabled                    = each.value.vtpm_enabled
   zone                            = each.value.zone
@@ -104,15 +103,15 @@ resource "azurerm_linux_virtual_machine" "this" {
 resource "azurerm_windows_virtual_machine" "this" {
   for_each = local.windows_confidential_virtual_machines
 
-  admin_password        = each.value.admin_password
-  admin_username        = each.value.admin_username
-  computer_name         = each.value.computer_name
   location              = each.value.location
   name                  = each.value.name
   network_interface_ids = [azurerm_network_interface.this[each.key].id]
   resource_group_name   = each.value.resource_group_name
-  secure_boot_enabled   = each.value.secure_boot_enabled
   size                  = each.value.size
+  admin_password        = each.value.admin_password
+  admin_username        = each.value.admin_username
+  computer_name         = each.value.computer_name
+  secure_boot_enabled   = each.value.secure_boot_enabled
   tags                  = each.value.tags
   vtpm_enabled          = each.value.vtpm_enabled
   zone                  = each.value.zone
@@ -154,10 +153,10 @@ resource "azurerm_virtual_machine_data_disk_attachment" "this" {
 resource "azurerm_backup_protected_vm" "this" {
   for_each = local.confidential_virtual_machine_backup_configurations
 
-  backup_policy_id    = each.value.backup_policy_resource_id
   recovery_vault_name = each.value.recovery_vault_name
   resource_group_name = each.value.recovery_vault_resource_group_name
-  source_vm_id        = local.confidential_virtual_machine_resource_ids[each.key]
+  backup_policy_id    = each.value.backup_policy_resource_id
   exclude_disk_luns   = each.value.exclude_disk_luns
   include_disk_luns   = each.value.include_disk_luns
+  source_vm_id        = local.confidential_virtual_machine_resource_ids[each.key]
 }

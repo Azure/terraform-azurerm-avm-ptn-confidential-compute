@@ -1,25 +1,3 @@
-variable "enable_telemetry" {
-  type        = bool
-  default     = true
-  description = <<DESCRIPTION
-This variable controls whether or not telemetry is enabled for the module.
-For more information see <https://aka.ms/avm/telemetryinfo>.
-If it is set to false, then no telemetry will be collected.
-DESCRIPTION
-  nullable    = false
-}
-
-variable "location" {
-  type        = string
-  default     = null
-  description = "Azure region for this submodule's telemetry deployment only. Required when telemetry is enabled. Does not default the required location inside each VM definition."
-
-  validation {
-    condition     = !var.enable_telemetry || var.location != null
-    error_message = "The location must not be null when telemetry is enabled."
-  }
-}
-
 variable "confidential_virtual_machines" {
   type = map(object({
     name                = string
@@ -137,49 +115,42 @@ DESCRIPTION
     ])
     error_message = "Each confidential_virtual_machines item must set os_type to either Linux or Windows."
   }
-
   validation {
     condition = alltrue([
       for vm in values(var.confidential_virtual_machines) : lower(vm.os_type) != "linux" || vm.admin_password != null || vm.admin_ssh_public_key != null
     ])
     error_message = "Linux confidential virtual machines require either admin_password or admin_ssh_public_key."
   }
-
   validation {
     condition = alltrue([
       for vm in values(var.confidential_virtual_machines) : lower(vm.os_type) != "windows" || vm.admin_password != null
     ])
     error_message = "Windows confidential virtual machines require admin_password."
   }
-
   validation {
     condition = alltrue([
       for vm in values(var.confidential_virtual_machines) : vm.private_ip_address != null || lower(vm.private_ip_address_allocation) != "static"
     ])
     error_message = "private_ip_address must be set when private_ip_address_allocation is Static."
   }
-
   validation {
     condition = alltrue([
       for vm in values(var.confidential_virtual_machines) : vm.os_disk.secure_vm_disk_encryption_set_id == null || vm.os_disk.security_encryption_type == "DiskWithVMGuestState"
     ])
     error_message = "os_disk.secure_vm_disk_encryption_set_id can only be used when os_disk.security_encryption_type is DiskWithVMGuestState."
   }
-
   validation {
     condition = alltrue([
       for vm in values(var.confidential_virtual_machines) : vm.os_disk.security_encryption_type == null || vm.vtpm_enabled
     ])
     error_message = "vtpm_enabled must be true when os_disk.security_encryption_type is set."
   }
-
   validation {
     condition = alltrue([
       for vm in values(var.confidential_virtual_machines) : vm.backup_configuration == null || vm.backup_configuration.include_disk_luns == null || vm.backup_configuration.exclude_disk_luns == null
     ])
     error_message = "backup_configuration.include_disk_luns and backup_configuration.exclude_disk_luns are mutually exclusive."
   }
-
   validation {
     condition = alltrue([
       for vm in values(var.confidential_virtual_machines) : vm.backup_configuration == null || vm.backup_configuration.include_disk_luns == null || alltrue([
@@ -188,7 +159,6 @@ DESCRIPTION
     ])
     error_message = "Each backup_configuration.include_disk_luns entry must reference a LUN defined in data_disks."
   }
-
   validation {
     condition = alltrue([
       for vm in values(var.confidential_virtual_machines) : vm.backup_configuration == null || vm.backup_configuration.exclude_disk_luns == null || alltrue([
@@ -197,14 +167,12 @@ DESCRIPTION
     ])
     error_message = "Each backup_configuration.exclude_disk_luns entry must reference a LUN defined in data_disks."
   }
-
   validation {
     condition = alltrue([
       for vm in values(var.confidential_virtual_machines) : length(vm.data_disks) == length(distinct([for disk in values(vm.data_disks) : disk.lun]))
     ])
     error_message = "Each confidential virtual machine must use unique LUN values across its data_disks."
   }
-
   validation {
     condition = alltrue(flatten([
       for vm in values(var.confidential_virtual_machines) : [
@@ -213,7 +181,6 @@ DESCRIPTION
     ]))
     error_message = "Each data disk LUN must be between 0 and 63."
   }
-
   validation {
     condition = alltrue(flatten([
       for vm in values(var.confidential_virtual_machines) : [
@@ -221,5 +188,27 @@ DESCRIPTION
       ]
     ]))
     error_message = "Each data disk caching value must be one of None, ReadOnly, or ReadWrite."
+  }
+}
+
+variable "enable_telemetry" {
+  type        = bool
+  default     = true
+  description = <<DESCRIPTION
+This variable controls whether or not telemetry is enabled for the module.
+For more information see <https://aka.ms/avm/telemetryinfo>.
+If it is set to false, then no telemetry will be collected.
+DESCRIPTION
+  nullable    = false
+}
+
+variable "location" {
+  type        = string
+  default     = null
+  description = "Azure region for this submodule's telemetry deployment only. Required when telemetry is enabled. Does not default the required location inside each VM definition."
+
+  validation {
+    condition     = !var.enable_telemetry || var.location != null
+    error_message = "The location must not be null when telemetry is enabled."
   }
 }

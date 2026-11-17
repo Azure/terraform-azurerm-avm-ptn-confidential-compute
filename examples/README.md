@@ -43,6 +43,16 @@ Verify that Azure CLI and both Azure providers target the intended subscription 
 Regenerate saved plans after configuration or subscription changes and review any planned replacements.
 Protect state files and saved plans: both examples store the administrator password.
 
+## CI password behavior
+
+Both examples use PowerShell `pre.ps1` and `post.ps1` hooks for managed policy checks and E2E tests.
+In GitHub Actions only, the pre-hook generates a cryptographically random Windows password when
+`TF_VAR_admin_password` is not supplied. It writes an ignored, run-specific `*.auto.tfvars.json` file
+without printing the password. Repeated preparation reuses the same input so idempotency checks do not rotate it.
+The post-hook removes the generated input; state and saved plans still contain the password and must be protected.
+On Unix runners the generated input is readable and writable only by its owner.
+Local runs are unchanged: supply the required password yourself. Do not retain or upload generated CI inputs.
+
 ## Validate and document
 
 ```powershell

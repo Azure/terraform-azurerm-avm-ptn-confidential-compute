@@ -10,8 +10,6 @@ mock_provider "azapi" {
 
 mock_provider "azurerm" {}
 
-mock_provider "modtm" {}
-
 override_module {
   target = module.confidential_virtual_machine
 }
@@ -35,16 +33,15 @@ variables {
   }
 }
 
-run "rejects_missing_telemetry_location" {
+run "uses_module_location_for_vm_and_telemetry" {
   command = plan
 
   variables {
     enable_telemetry = true
-    location         = null
+    location         = "eastus"
     confidential_virtual_machines = {
       vm1 = {
         name                = "vm-test"
-        location            = null
         resource_group_name = "rg-test"
         subnet_resource_id  = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-network/providers/Microsoft.Network/virtualNetworks/vnet-test/subnets/default"
         source_image_reference = {
@@ -59,22 +56,23 @@ run "rejects_missing_telemetry_location" {
     }
   }
 
-  expect_failures = [
-    var.confidential_virtual_machines,
-  ]
+  assert {
+    condition     = local.confidential_virtual_machines["vm1"].location == "eastus" && local.telemetry_location == "eastus"
+    error_message = "VMs without an override and telemetry must use the required module region."
+  }
   providers = {
     azapi   = azapi
     azurerm = azurerm
-    modtm   = modtm
+
   }
 }
 
-run "accepts_vm_level_location_for_telemetry" {
+run "accepts_vm_level_location_override" {
   command = plan
 
   variables {
     enable_telemetry = true
-    location         = null
+    location         = "eastus"
     confidential_virtual_machines = {
       vm1 = {
         name                = "vm-test"
@@ -94,12 +92,12 @@ run "accepts_vm_level_location_for_telemetry" {
   }
 
   assert {
-    condition     = local.telemetry_location == "eastus2"
-    error_message = "telemetry_location should resolve from the first VM location when module-level location is null."
+    condition     = local.confidential_virtual_machines["vm1"].location == "eastus2" && local.telemetry_location == "eastus"
+    error_message = "A VM's region override must not change the module telemetry region."
   }
   providers = {
     azapi   = azapi
     azurerm = azurerm
-    modtm   = modtm
+
   }
 }

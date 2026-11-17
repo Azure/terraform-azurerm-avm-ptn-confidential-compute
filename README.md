@@ -70,7 +70,8 @@ image availability for the selected example. The root module itself does not imp
 
 ## Configuration behavior
 
-- Every VM needs either its own `location` or the root `location`.
+- The root `location` is required and must not be null. It supplies the region for VMs without their own `location`;
+  per-VM overrides remain supported. Both examples supply `eastus` by default.
 - VM-level `tags` replace, rather than merge with, root `tags`. Data-disk tags similarly replace VM tags.
   Tags may be omitted at all levels. An explicit empty disk tags map disables inheritance.
 - A supplied `private_ip_address` forces static allocation. Otherwise allocation defaults to `Dynamic`.
@@ -85,8 +86,8 @@ image availability for the selected example. The root module itself does not imp
 ## Telemetry
 
 Telemetry is enabled by default. Set `enable_telemetry = false` on the module call to disable it in both the root and child module.
-With telemetry enabled, `location` is used for telemetry, falling back to the first VM's resolved location when omitted.
-An empty VM map therefore still requires `location` unless telemetry is disabled.
+The required root `location` supplies telemetry's region even when individual VMs override their deployment region.
+Disabling telemetry does not make the root `location` optional.
 
 Both modules create an empty Azure deployment at the active subscription scope for telemetry.
 The deployment identity needs `Microsoft.Resources/deployments/read`, `write`, and `delete` permissions at that scope.
@@ -112,8 +113,6 @@ The following requirements are needed by this module:
 
 - <a name="requirement_azurerm"></a> [azurerm](#requirement\_azurerm) (~> 4.0)
 
-- <a name="requirement_modtm"></a> [modtm](#requirement\_modtm) (~> 0.3)
-
 ## Resources
 
 The following resources are used by this module:
@@ -125,7 +124,13 @@ The following resources are used by this module:
 <!-- markdownlint-disable MD013 -->
 ## Required Inputs
 
-No required inputs.
+The following input variables are required:
+
+### <a name="input_location"></a> [location](#input\_location)
+
+Description: Required Azure region used for telemetry and as the default for VMs that omit their own location.
+
+Type: `string`
 
 ## Optional Inputs
 
@@ -255,14 +260,6 @@ If it is set to false, then no telemetry will be collected.
 Type: `bool`
 
 Default: `true`
-
-### <a name="input_location"></a> [location](#input\_location)
-
-Description: Default Azure region for VMs that omit location and for telemetry. When omitted, every VM needs its own location and telemetry uses the first VM's resolved location. Required for an empty VM map when telemetry is enabled.
-
-Type: `string`
-
-Default: `null`
 
 ### <a name="input_tags"></a> [tags](#input\_tags)
 
