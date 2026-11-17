@@ -20,6 +20,9 @@ The [examples](examples/README.md) create their own prerequisites.
 - A confidential-compute-compatible VM size and image available in the selected region and zone, with sufficient subscription quota.
 - An SSH public key or password for Linux; a password is required for Windows. Protect Terraform state because passwords are retained in state.
 - For backup, an existing compatible Recovery Services vault and VM backup policy, and permissions to configure VM protection.
+  Use an Enhanced (`V2`) policy for the VM configuration in the backup-enabled example. The module associates the
+  supplied policy ID; it does not create policies or upgrade Standard (`V1`) policies to Enhanced.
+  For daily/weekly Enhanced policies, explicitly configure instant-restore retention shorter than vaulted retention.
 
 The current VM, networking, data-disk, and backup implementation uses the AzureRM provider.
 AzAPI is used for subscription-scoped telemetry deployments. Configure the providers in the calling Terraform root;

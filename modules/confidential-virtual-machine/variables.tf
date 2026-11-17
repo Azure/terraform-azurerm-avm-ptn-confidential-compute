@@ -109,7 +109,7 @@ Keys identify VM instances and must be known at plan time. Values are objects:
 - `backup_configuration` - (Optional) Azure Backup protection configuration for the VM:
   - `recovery_vault_resource_group_name` - (Required) Resource group name of the Recovery Services vault.
   - `recovery_vault_name` - (Required) Name of the Recovery Services vault.
-  - `backup_policy_resource_id` - (Required) Backup policy resource ID to associate with the VM.
+  - `backup_policy_resource_id` - (Required) Compatible backup policy resource ID to associate with the VM. Use an Enhanced (`V2`) policy when required by the VM configuration. For daily/weekly Enhanced policies, explicitly configure instant-restore retention shorter than vaulted retention. The module does not create or convert policies.
   - `include_disk_luns` - (Optional) Declared data-disk LUNs to include in backup. Mutually exclusive with `exclude_disk_luns`.
   - `exclude_disk_luns` - (Optional) Declared data-disk LUNs to exclude from backup. Mutually exclusive with `include_disk_luns`.
 - `data_disks` - (Optional) Map of additional managed data disks (zero to many) created and attached to the VM:

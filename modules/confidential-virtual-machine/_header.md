@@ -16,6 +16,9 @@ When calling this submodule directly:
   Disk tags replace VM tags, including an explicit empty map. Disk zones must be set independently of VM zones.
 - Supply an existing vault and VM backup policy to enable backup. Include/exclude LUN sets are mutually exclusive
   and must reference data disks declared on the same VM.
+- Use an Enhanced (`V2`) backup policy when the VM configuration requires it, as in the backup-enabled example.
+  This submodule associates the supplied policy ID; it does not create or convert policies.
+  For daily/weekly Enhanced policies, explicitly configure instant-restore retention shorter than vaulted retention.
 - Configure providers in the calling Terraform root. No public IP address, network security group,
   resource group, virtual network, subnet, vault, or policy is created by this submodule.
 

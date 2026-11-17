@@ -15,6 +15,8 @@ Provider-mocked Terraform tests live in [unit](unit/):
 
 - [Windows backup example](unit/backup_example_location.tftest.hcl): The resource group, virtual network, and backup vault
   use East US without random region selection; the real pattern and VM submodule exercise the Windows VM and backup-protection paths.
+  The policy must explicitly use Enhanced (`V2`) to avoid Azure rejecting the default Standard policy.
+  Instant-restore retention must be explicit, positive, and strictly shorter than vaulted daily retention.
 - [Data-disk tags](unit/data_disk_tags.tftest.hcl): The real VM submodule accepts omitted disk and VM tags, inherits VM tags,
   and preserves explicit overrides and empty maps.
 - [Data-disk validation](unit/data_disk_validations.tftest.hcl): Duplicate LUNs, backup selection of an undeclared LUN,

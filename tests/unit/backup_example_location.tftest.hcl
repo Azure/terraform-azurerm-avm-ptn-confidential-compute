@@ -57,6 +57,19 @@ run "uses_east_us_for_backup_example" {
   }
 
   assert {
+    condition     = azurerm_backup_policy_vm.this.policy_type == "V2"
+    error_message = "The confidential VM must use an Enhanced (V2) backup policy, not the default Standard (V1) policy."
+  }
+
+  assert {
+    condition = azurerm_backup_policy_vm.this.instant_restore_retention_days != null ? (
+      azurerm_backup_policy_vm.this.instant_restore_retention_days >= 1 &&
+      azurerm_backup_policy_vm.this.instant_restore_retention_days < azurerm_backup_policy_vm.this.retention_daily[0].count
+    ) : false
+    error_message = "The Enhanced policy must explicitly retain instant-restore snapshots for fewer days than its vaulted daily recovery points."
+  }
+
+  assert {
     condition     = contains(keys(module.test.backup_protected_vm_ids), "cvm1")
     error_message = "The backup example must retain protection for the Windows VM."
   }

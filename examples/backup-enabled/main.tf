@@ -60,10 +60,12 @@ resource "azurerm_recovery_services_vault" "this" {
 }
 
 resource "azurerm_backup_policy_vm" "this" {
-  name                = "daily-backup"
-  resource_group_name = azurerm_resource_group.this.name
-  recovery_vault_name = azurerm_recovery_services_vault.this.name
-  timezone            = "UTC"
+  instant_restore_retention_days = 2
+  name                           = "daily-backup"
+  policy_type                    = "V2"
+  resource_group_name            = azurerm_resource_group.this.name
+  recovery_vault_name            = azurerm_recovery_services_vault.this.name
+  timezone                       = "UTC"
 
   backup {
     frequency = "Daily"

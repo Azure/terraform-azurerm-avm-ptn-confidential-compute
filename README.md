@@ -22,6 +22,9 @@ The [examples](examples/README.md) create their own prerequisites.
 - A confidential-compute-compatible VM size and image available in the selected region and zone, with sufficient subscription quota.
 - An SSH public key or password for Linux; a password is required for Windows. Protect Terraform state because passwords are retained in state.
 - For backup, an existing compatible Recovery Services vault and VM backup policy, and permissions to configure VM protection.
+  Use an Enhanced (`V2`) policy for the VM configuration in the backup-enabled example. The module associates the
+  supplied policy ID; it does not create policies or upgrade Standard (`V1`) policies to Enhanced.
+  For daily/weekly Enhanced policies, explicitly configure instant-restore retention shorter than vaulted retention.
 
 The current VM, networking, data-disk, and backup implementation uses the AzureRM provider.
 AzAPI is used for subscription-scoped telemetry deployments. Configure the providers in the calling Terraform root;
@@ -162,7 +165,7 @@ Keys identify VM instances and must be known at plan time. Values are objects:
 - `backup_configuration` - (Optional) Azure Backup configuration:
   - `recovery_vault_resource_group_name` - (Required) Resource group name of the Recovery Services vault.
   - `recovery_vault_name` - (Required) Name of the Recovery Services vault.
-  - `backup_policy_resource_id` - (Required) Backup policy resource ID to associate with the VM.
+  - `backup_policy_resource_id` - (Required) Compatible backup policy resource ID to associate with the VM. Use an Enhanced (`V2`) policy when required by the VM configuration. For daily/weekly Enhanced policies, explicitly configure instant-restore retention shorter than vaulted retention. The module does not create or convert policies.
   - `include_disk_luns` - (Optional) Declared data-disk LUNs to include in backup. Mutually exclusive with `exclude_disk_luns`.
   - `exclude_disk_luns` - (Optional) Declared data-disk LUNs to exclude from backup. Mutually exclusive with `include_disk_luns`.
 - `data_disks` - (Optional) Map of additional managed data disks (zero to many) created and attached to the VM:

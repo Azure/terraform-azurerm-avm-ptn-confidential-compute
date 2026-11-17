@@ -4,7 +4,7 @@
   an AzAPI-based AVM resource group named `rg-ckhy` by default, networking prerequisites, and a 128-GB managed data disk.
 - [Backup enabled](backup-enabled/README.md): One Windows Server 2025 Datacenter Gen2 confidential VM (`Standard_DC2as_v5`),
   networking prerequisites, a Recovery Services vault,
-  a daily backup policy, and a VM protection association. No additional data disks are created.
+  a daily Enhanced (`V2`) backup policy, and a VM protection association. No additional data disks are created.
 
 ## Run examples
 
