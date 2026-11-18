@@ -54,6 +54,12 @@ run "rejects_backup_policy_in_a_different_vault" {
   }
 
   expect_failures = [var.confidential_virtual_machines]
+  providers = {
+    azapi  = azapi
+    random = random
+    time   = time
+    tls    = tls
+  }
 }
 
 run "rejects_duplicate_data_disk_luns" {

@@ -8,7 +8,9 @@ mock_provider "azapi" {
 }
 
 mock_provider "random" {}
+
 mock_provider "time" {}
+
 mock_provider "tls" {}
 
 run "windows_confidential_security_profile" {
@@ -55,6 +57,12 @@ run "windows_confidential_security_profile" {
       module.virtual_machine["cvm1"].resource.body.properties.storageProfile.osDisk.managedDisk.securityProfile.securityEncryptionType == "DiskWithVMGuestState"
     )
     error_message = "Omitting encryption at host must preserve the Windows VM's confidential OS disk and UEFI security settings."
+  }
+  providers = {
+    azapi  = azapi
+    random = random
+    time   = time
+    tls    = tls
   }
 }
 
