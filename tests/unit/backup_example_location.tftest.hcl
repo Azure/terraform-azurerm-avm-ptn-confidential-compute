@@ -1,39 +1,28 @@
 mock_provider "azapi" {
   mock_data "azapi_client_config" {
     defaults = {
+      subscription_id          = "00000000-0000-0000-0000-000000000000"
       subscription_resource_id = "/subscriptions/00000000-0000-0000-0000-000000000000"
     }
   }
-}
 
-mock_provider "azurerm" {
-  mock_resource "azurerm_network_interface" {
+  mock_data "azapi_resource" {
     defaults = {
-      id = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-backup/providers/Microsoft.Network/networkInterfaces/backup-nic"
-    }
-  }
-
-  mock_resource "azurerm_subnet" {
-    defaults = {
-      id = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-backup/providers/Microsoft.Network/virtualNetworks/vnet-backup/subnets/snet-workload"
-    }
-  }
-
-  mock_resource "azurerm_windows_virtual_machine" {
-    defaults = {
-      id = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-backup/providers/Microsoft.Compute/virtualMachines/backup"
-    }
-  }
-
-  mock_resource "azurerm_backup_policy_vm" {
-    defaults = {
-      id = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-backup/providers/Microsoft.RecoveryServices/vaults/rsv-backup/backupPolicies/daily-backup"
+      exists = false
     }
   }
 }
 
+mock_provider "random" {
+  mock_resource "random_string" {
+    defaults = {
+      result = "abc123"
+    }
+  }
+}
 
-mock_provider "random" {}
+mock_provider "time" {}
+mock_provider "tls" {}
 
 run "uses_east_us_for_backup_example" {
   command = apply
@@ -47,35 +36,77 @@ run "uses_east_us_for_backup_example" {
     admin_password   = "UnitTest-Password123!"
   }
 
+  override_module {
+    target = module.naming
+    outputs = {
+      names = {
+        resource_group = { name_unique = "rg-abc123" }
+      }
+    }
+  }
+
+  override_resource {
+    target = azapi_resource.resource_group
+    values = {
+      id = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-abc123"
+    }
+  }
+
+  override_resource {
+    target = azapi_resource.virtual_network
+    values = {
+      id = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-abc123/providers/Microsoft.Network/virtualNetworks/vnet-cvm-backup-abc123"
+    }
+  }
+
+  override_resource {
+    target = azapi_resource.recovery_vault
+    values = {
+      id = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-abc123/providers/Microsoft.RecoveryServices/vaults/rsv-cvm-abc123"
+    }
+  }
+
+  override_resource {
+    target = azapi_resource.subnet
+    values = {
+      id = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-abc123/providers/Microsoft.Network/virtualNetworks/vnet-cvm-backup-abc123/subnets/snet-workload"
+    }
+  }
+
+  override_resource {
+    target = azapi_resource.backup_policy
+    values = {
+      id = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-abc123/providers/Microsoft.RecoveryServices/vaults/rsv-cvm-abc123/backupPolicies/daily-backup"
+    }
+  }
+
   assert {
     condition = alltrue([
-      azurerm_resource_group.this.location == "eastus",
-      azurerm_virtual_network.this.location == "eastus",
-      azurerm_recovery_services_vault.this.location == "eastus",
+      azapi_resource.resource_group.location == "eastus",
+      azapi_resource.virtual_network.location == "eastus",
+      azapi_resource.recovery_vault.location == "eastus",
     ])
-    error_message = "The backup example must deploy its resource group, network, and vault in East US without random region selection."
+    error_message = "The backup example must deploy its resource group, network, and vault in East US."
   }
 
   assert {
-    condition     = module.test.confidential_virtual_machine_resource_ids["cvm1"] == "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-backup/providers/Microsoft.Compute/virtualMachines/backup"
-    error_message = "The backup example must create a Windows VM through the pattern module."
+    condition     = try(azapi_resource.recovery_vault.body.properties.publicNetworkAccess, null) == "Enabled"
+    error_message = "The vault create request must explicitly enable public network access because the backup example does not provision a private endpoint."
   }
 
   assert {
-    condition     = azurerm_backup_policy_vm.this.policy_type == "V2"
-    error_message = "The confidential VM must use an Enhanced (V2) backup policy, not the default Standard (V1) policy."
+    condition = (
+      azapi_resource.backup_policy.body.properties.policyType == "V2" &&
+      azapi_resource.backup_policy.body.properties.instantRpRetentionRangeInDays < azapi_resource.backup_policy.body.properties.retentionPolicy.dailySchedule.retentionDuration.count
+    )
+    error_message = "The backup example must use an Enhanced policy with shorter instant-restore than vaulted daily retention."
   }
 
   assert {
-    condition = azurerm_backup_policy_vm.this.instant_restore_retention_days != null ? (
-      azurerm_backup_policy_vm.this.instant_restore_retention_days >= 1 &&
-      azurerm_backup_policy_vm.this.instant_restore_retention_days < azurerm_backup_policy_vm.this.retention_daily[0].count
-    ) : false
-    error_message = "The Enhanced policy must explicitly retain instant-restore snapshots for fewer days than its vaulted daily recovery points."
-  }
-
-  assert {
-    condition     = contains(keys(module.test.backup_protected_vm_ids), "cvm1")
-    error_message = "The backup example must retain protection for the Windows VM."
+    condition = (
+      module.test.backup_protected_vm_ids["cvm1"] ==
+      "${trimsuffix(azapi_resource.backup_policy.id, "/backupPolicies/daily-backup")}/backupFabrics/Azure/protectionContainers/iaasvmcontainer;iaasvmcontainerv2;${azapi_resource.resource_group.name};cvm-backup-abc123/protectedItems/VM;iaasvmcontainerv2;${azapi_resource.resource_group.name};cvm-backup-abc123"
+    )
+    error_message = "The pattern must expose the AVM backup child protected-item ID in the selected policy vault."
   }
 }

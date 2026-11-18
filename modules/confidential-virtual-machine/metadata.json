@@ -1,7 +1,0 @@
-{
-  "$schema": "https://raw.githubusercontent.com/Azure/azure-verified-modules-tools/main/src/Avm.Authoring/Resources/Schemas/v1/avm-module-metadata.schema.json",
-  "moduleDisplayName": "Azure Confidential Virtual Machine",
-  "moduleDescription": "Deploys Azure Confidential Virtual Machines and their network interfaces.",
-  "canonicalType": "confidential-compute/confidential-virtual-machine",
-  "telemetryIdPrefix": "46d3xtrf.ptn.8f1c2d0"
-}

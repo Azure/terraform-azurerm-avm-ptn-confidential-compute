@@ -5,8 +5,8 @@ Run commands from the repository root after importing the module:
 
 ```powershell
 Import-Module Avm.Authoring
-avm test unit
 avm test
+avm test unit
 pwsh -NoProfile -File .\tests\ci_admin_password.tests.ps1
 ```
 
@@ -15,21 +15,20 @@ pwsh -NoProfile -File .\tests\ci_admin_password.tests.ps1
 Provider-mocked Terraform tests live in [unit](unit/):
 
 - [Windows backup example](unit/backup_example_location.tftest.hcl): The resource group, virtual network, and backup vault
-  use East US without random region selection; the real pattern and VM submodule exercise the Windows VM and backup-protection paths.
+  use East US without random region selection. The pattern exercises the published AVM VM and backup modules.
   The policy must explicitly use Enhanced (`V2`) to avoid Azure rejecting the default Standard policy.
   Instant-restore retention must be explicit, positive, and strictly shorter than vaulted daily retention.
-- [Data-disk tags](unit/data_disk_tags.tftest.hcl): The real VM submodule accepts omitted disk and VM tags, inherits VM tags,
-  and preserves explicit overrides and empty maps.
-- [Data-disk validation](unit/data_disk_validations.tftest.hcl): Duplicate LUNs, backup selection of an undeclared LUN,
-  and invalid caching modes are rejected.
-- [Defaults and outputs](unit/defaults_and_outputs.tftest.hcl): Root location/tag defaults and selected output forwarding.
+- [Disk defaults and Linux VM composition](unit/data_disk_tags.tftest.hcl): The root pattern preserves tag inheritance,
+  explicit empty overrides, and disk zones independent of the VM's zone. The AVM VM receives the confidential
+  security defaults and supports Linux password authentication alongside the supplied SSH key.
+- [Disk and backup validation](unit/data_disk_validations.tftest.hcl): Rejects duplicate LUNs, invalid caching modes,
+  backup selection of undeclared LUNs, and a policy ID pointing to a different vault.
+- [Defaults and outputs](unit/defaults_and_outputs.tftest.hcl): Root region and tag defaults and VM and managed disk IDs.
 - [Telemetry location](unit/telemetry_location_validation.tftest.hcl): The required root region supplies VM defaults
   and telemetry; VM region overrides do not change telemetry's region.
-- [Windows default example](unit/windows.tftest.hcl): The default example creates its resource group in East US and exercises
-  the Windows VM path through the root pattern and real VM submodule with mocked providers.
+- [Windows VM and default example](unit/windows.tftest.hcl): Exercises the Windows confidential security profile and
+  the default example's East US deployment using the root pattern and published AVM VM module.
 
-There are nine test runs across these six files. Root-interface tests override the confidential VM submodule.
-The disk-tag and both Windows-example tests exercise the real module implementation with mocked providers.
 Mocked `apply` does not deploy Azure resources, prove regional SKU
 availability or quota, or verify backup and restore.
 

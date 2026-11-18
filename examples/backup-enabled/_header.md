@@ -9,7 +9,9 @@ This standalone Terraform root deploys:
 - An Azure Backup protection association between the VM and that policy.
 
 The VM has no additional data disks. No public IP address or network security group is created.
-The example uses AzureRM for infrastructure; the pattern module uses AzAPI for telemetry.
+The Recovery Services vault has public network access enabled; this example does not provision a vault private endpoint.
+The example uses AzAPI for supporting infrastructure and calls the root pattern directly. The pattern uses the
+published AVM VM and backup modules for the confidential VM and its protection.
 
 ## Before deploying
 
@@ -34,6 +36,8 @@ Managed GitHub Actions checks generate a temporary password input when none is s
 The password must contain 12-123 characters and at least three of lowercase letters, uppercase letters, digits, and special characters.
 Regenerate saved plans after configuration changes. Switching an existing Linux VM to Windows requires recreation;
 review the VM and backup-protection changes before applying.
+If upgrading from the former wrapper layout, follow the [state migration guide](../../README.md#upgrading-an-existing-deployment)
+with `module.test` as the pattern's address.
 
 Protect local state and saved plans: they contain the administrator password. Use private-network connectivity to reach the VM.
 Enabling protection does not verify a completed backup or restore. Recovery points and vault soft-delete settings

@@ -1,35 +1,4 @@
-terraform {
-  required_version = ">= 1.9, < 2.0"
-
-  required_providers {
-    azapi = {
-      source  = "Azure/azapi"
-      version = "~> 2.12"
-    }
-    azurerm = {
-      source  = "hashicorp/azurerm"
-      version = "~> 4.0"
-    }
-    random = {
-      source  = "hashicorp/random"
-      version = "~> 3.7"
-    }
-  }
-}
-
 provider "azapi" {}
-
-provider "azurerm" {
-  features {}
-}
-
-resource "random_string" "suffix" {
-  length  = 6
-  lower   = true
-  numeric = true
-  special = false
-  upper   = false
-}
 
 removed {
   from = azurerm_resource_group.this
@@ -48,22 +17,27 @@ module "resource_group" {
   enable_telemetry = var.enable_telemetry
 }
 
-resource "azurerm_virtual_network" "this" {
-  location            = module.resource_group.location
-  name                = "vnet-cvm-01"
-  resource_group_name = module.resource_group.name
-  address_space       = ["10.40.0.0/16"]
-
-  depends_on = [module.resource_group]
+resource "azapi_resource" "virtual_network" {
+  location  = module.resource_group.location
+  name      = "vnet-cvm-01"
+  parent_id = module.resource_group.resource_id
+  type      = "Microsoft.Network/virtualNetworks@2024-05-01"
+  body = {
+    properties = {
+      addressSpace = { addressPrefixes = ["10.40.0.0/16"] }
+    }
+  }
+  response_export_values = []
 }
 
-resource "azurerm_subnet" "this" {
-  name                 = "snet-workload"
-  resource_group_name  = module.resource_group.name
-  virtual_network_name = azurerm_virtual_network.this.name
-  address_prefixes     = ["10.40.1.0/24"]
-
-  depends_on = [azurerm_virtual_network.this]
+resource "azapi_resource" "subnet" {
+  name      = "snet-workload"
+  parent_id = azapi_resource.virtual_network.id
+  type      = "Microsoft.Network/virtualNetworks/subnets@2024-05-01"
+  body = {
+    properties = { addressPrefix = "10.40.1.0/24" }
+  }
+  response_export_values = []
 }
 
 module "test" {
@@ -74,7 +48,7 @@ module "test" {
     cvm1 = {
       name                = "test"
       resource_group_name = module.resource_group.name
-      subnet_resource_id  = azurerm_subnet.this.id
+      subnet_resource_id  = azapi_resource.subnet.id
       source_image_reference = {
         publisher = "MicrosoftWindowsServer"
         offer     = "WindowsServer"
@@ -98,5 +72,5 @@ module "test" {
   }
   enable_telemetry = var.enable_telemetry
 
-  depends_on = [azurerm_subnet.this, module.resource_group]
+  depends_on = [module.resource_group]
 }

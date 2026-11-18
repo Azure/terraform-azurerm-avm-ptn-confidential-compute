@@ -10,7 +10,8 @@ This standalone Terraform root deploys:
 - One 128-GB Premium LRS managed data disk attached at LUN 0.
 
 No public IP address, network security group, or backup protection is created.
-The existing network and VM implementation uses AzureRM; resource-group creation and telemetry use AzAPI.
+The example calls the root pattern directly. The pattern uses the published AVM VM module for the VM and NIC
+and AzAPI for the managed data disk.
 
 ## Before deploying
 
@@ -24,6 +25,8 @@ Managed GitHub Actions checks generate a temporary password input when none is s
 The password must contain 12-123 characters and at least three of lowercase letters, uppercase letters, digits, and special characters.
 After changing this configuration, regenerate any saved Terraform plan before applying it.
 Review the plan for replacements if switching from an earlier Linux deployment or a different region.
+If upgrading from the former wrapper layout, follow the [state migration guide](../../README.md#upgrading-an-existing-deployment)
+with `module.test` as the pattern's address.
 
 Tags are optional. Data disks inherit VM tags unless disk-level tags are supplied.
 
@@ -31,38 +34,7 @@ Protect local state and saved plans: they contain the administrator password. Us
 For managed deployment and cleanup commands, see the [examples guide](../README.md).
 
 ```hcl
-terraform {
-  required_version = ">= 1.9, < 2.0"
-
-  required_providers {
-    azapi = {
-      source  = "Azure/azapi"
-      version = "~> 2.12"
-    }
-    azurerm = {
-      source  = "hashicorp/azurerm"
-      version = "~> 4.0"
-    }
-    random = {
-      source  = "hashicorp/random"
-      version = "~> 3.7"
-    }
-  }
-}
-
 provider "azapi" {}
-
-provider "azurerm" {
-  features {}
-}
-
-resource "random_string" "suffix" {
-  length  = 6
-  lower   = true
-  numeric = true
-  special = false
-  upper   = false
-}
 
 removed {
   from = azurerm_resource_group.this
@@ -81,22 +53,27 @@ module "resource_group" {
   enable_telemetry = var.enable_telemetry
 }
 
-resource "azurerm_virtual_network" "this" {
-  location            = module.resource_group.location
-  name                = "vnet-cvm-01"
-  resource_group_name = module.resource_group.name
-  address_space       = ["10.40.0.0/16"]
-
-  depends_on = [module.resource_group]
+resource "azapi_resource" "virtual_network" {
+  location  = module.resource_group.location
+  name      = "vnet-cvm-01"
+  parent_id = module.resource_group.resource_id
+  type      = "Microsoft.Network/virtualNetworks@2024-05-01"
+  body = {
+    properties = {
+      addressSpace = { addressPrefixes = ["10.40.0.0/16"] }
+    }
+  }
+  response_export_values = []
 }
 
-resource "azurerm_subnet" "this" {
-  name                 = "snet-workload"
-  resource_group_name  = module.resource_group.name
-  virtual_network_name = azurerm_virtual_network.this.name
-  address_prefixes     = ["10.40.1.0/24"]
-
-  depends_on = [azurerm_virtual_network.this]
+resource "azapi_resource" "subnet" {
+  name      = "snet-workload"
+  parent_id = azapi_resource.virtual_network.id
+  type      = "Microsoft.Network/virtualNetworks/subnets@2024-05-01"
+  body = {
+    properties = { addressPrefix = "10.40.1.0/24" }
+  }
+  response_export_values = []
 }
 
 module "test" {
@@ -107,7 +84,7 @@ module "test" {
     cvm1 = {
       name                = "test"
       resource_group_name = module.resource_group.name
-      subnet_resource_id  = azurerm_subnet.this.id
+      subnet_resource_id  = azapi_resource.subnet.id
       source_image_reference = {
         publisher = "MicrosoftWindowsServer"
         offer     = "WindowsServer"
@@ -131,7 +108,7 @@ module "test" {
   }
   enable_telemetry = var.enable_telemetry
 
-  depends_on = [azurerm_subnet.this, module.resource_group]
+  depends_on = [module.resource_group]
 }
 ```
 
@@ -140,21 +117,16 @@ module "test" {
 
 The following requirements are needed by this module:
 
-- <a name="requirement_terraform"></a> [terraform](#requirement\_terraform) (>= 1.9, < 2.0)
+- <a name="requirement_terraform"></a> [terraform](#requirement\_terraform) (>= 1.16, < 2.0)
 
 - <a name="requirement_azapi"></a> [azapi](#requirement\_azapi) (~> 2.12)
-
-- <a name="requirement_azurerm"></a> [azurerm](#requirement\_azurerm) (~> 4.0)
-
-- <a name="requirement_random"></a> [random](#requirement\_random) (~> 3.7)
 
 ## Resources
 
 The following resources are used by this module:
 
-- [azurerm_subnet.this](https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/subnet) (resource)
-- [azurerm_virtual_network.this](https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/virtual_network) (resource)
-- [random_string.suffix](https://registry.terraform.io/providers/hashicorp/random/latest/docs/resources/string) (resource)
+- [azapi_resource.subnet](https://registry.terraform.io/providers/Azure/azapi/latest/docs/resources/resource) (resource)
+- [azapi_resource.virtual_network](https://registry.terraform.io/providers/Azure/azapi/latest/docs/resources/resource) (resource)
 
 <!-- markdownlint-disable MD013 -->
 ## Required Inputs

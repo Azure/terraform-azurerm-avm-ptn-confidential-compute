@@ -1,27 +1,4 @@
-terraform {
-  required_version = ">= 1.9, < 2.0"
-
-  required_providers {
-    azapi = {
-      source  = "Azure/azapi"
-      version = "~> 2.12"
-    }
-    azurerm = {
-      source  = "hashicorp/azurerm"
-      version = "~> 4.0"
-    }
-    random = {
-      source  = "hashicorp/random"
-      version = "~> 3.7"
-    }
-  }
-}
-
 provider "azapi" {}
-
-provider "azurerm" {
-  features {}
-}
 
 resource "random_string" "suffix" {
   length  = 6
@@ -36,67 +13,87 @@ module "naming" {
   version = "0.2.0"
 }
 
-resource "azurerm_resource_group" "this" {
-  location = var.location
-  name     = module.naming.names.resource_group.name_unique
+data "azapi_client_config" "current" {}
+
+resource "azapi_resource" "resource_group" {
+  location               = var.location
+  name                   = "${module.naming.names.resource_group.name_unique}-01"
+  parent_id              = data.azapi_client_config.current.subscription_resource_id
+  type                   = "Microsoft.Resources/resourceGroups@2024-03-01"
+  response_export_values = []
 }
 
-resource "azurerm_virtual_network" "this" {
-  location            = azurerm_resource_group.this.location
-  name                = "vnet-cvm-backup-${random_string.suffix.result}"
-  resource_group_name = azurerm_resource_group.this.name
-  address_space       = ["10.50.0.0/16"]
-
-  depends_on = [azurerm_resource_group.this]
-}
-
-resource "azurerm_subnet" "this" {
-  name                 = "snet-workload"
-  resource_group_name  = azurerm_resource_group.this.name
-  virtual_network_name = azurerm_virtual_network.this.name
-  address_prefixes     = ["10.50.1.0/24"]
-
-  depends_on = [azurerm_virtual_network.this]
-}
-
-resource "azurerm_recovery_services_vault" "this" {
-  location            = azurerm_resource_group.this.location
-  name                = "rsv-cvm-${random_string.suffix.result}"
-  resource_group_name = azurerm_resource_group.this.name
-  sku                 = "Standard"
-
-  depends_on = [azurerm_resource_group.this]
-}
-
-resource "azurerm_backup_policy_vm" "this" {
-  name                           = "daily-backup"
-  recovery_vault_name            = azurerm_recovery_services_vault.this.name
-  resource_group_name            = azurerm_resource_group.this.name
-  instant_restore_retention_days = 2
-  policy_type                    = "V2"
-  timezone                       = "UTC"
-
-  backup {
-    frequency = "Daily"
-    time      = "23:00"
+resource "azapi_resource" "virtual_network" {
+  location  = azapi_resource.resource_group.location
+  name      = "vnet-cvm-backup-${random_string.suffix.result}"
+  parent_id = azapi_resource.resource_group.id
+  type      = "Microsoft.Network/virtualNetworks@2024-05-01"
+  body = {
+    properties = { addressSpace = { addressPrefixes = ["10.50.0.0/16"] } }
   }
+  response_export_values = []
+}
 
-  retention_daily {
-    count = 7
+resource "azapi_resource" "subnet" {
+  name      = "snet-workload"
+  parent_id = azapi_resource.virtual_network.id
+  type      = "Microsoft.Network/virtualNetworks/subnets@2024-05-01"
+  body = {
+    properties = { addressPrefix = "10.50.1.0/24" }
   }
+  response_export_values = []
+}
 
-  depends_on = [azurerm_recovery_services_vault.this]
+resource "azapi_resource" "recovery_vault" {
+  location  = azapi_resource.resource_group.location
+  name      = "rsv-cvm-${random_string.suffix.result}"
+  parent_id = azapi_resource.resource_group.id
+  type      = "Microsoft.RecoveryServices/vaults@2024-04-01"
+  body = {
+    sku = { name = "Standard" }
+    properties = {
+      publicNetworkAccess = "Enabled"
+    }
+  }
+  response_export_values = []
+}
+
+resource "azapi_resource" "backup_policy" {
+  name      = "daily-backup"
+  parent_id = azapi_resource.recovery_vault.id
+  type      = "Microsoft.RecoveryServices/vaults/backupPolicies@2024-10-01"
+  body = {
+    properties = {
+      backupManagementType          = "AzureIaasVM"
+      policyType                    = "V2"
+      timeZone                      = "UTC"
+      instantRpRetentionRangeInDays = 2
+      schedulePolicy = {
+        schedulePolicyType   = "SimpleSchedulePolicyV2"
+        scheduleRunFrequency = "Daily"
+        dailySchedule        = { scheduleRunTimes = ["2018-07-30T23:00:00Z"] }
+      }
+      retentionPolicy = {
+        retentionPolicyType = "LongTermRetentionPolicy"
+        dailySchedule = {
+          retentionTimes    = ["2018-07-30T23:00:00Z"]
+          retentionDuration = { count = 7, durationType = "Days" }
+        }
+      }
+    }
+  }
+  response_export_values = []
 }
 
 module "test" {
   source = "../../"
 
-  location = azurerm_resource_group.this.location
+  location = azapi_resource.resource_group.location
   confidential_virtual_machines = {
     cvm1 = {
       name                = "cvm-backup-${random_string.suffix.result}"
-      resource_group_name = azurerm_resource_group.this.name
-      subnet_resource_id  = azurerm_subnet.this.id
+      resource_group_name = azapi_resource.resource_group.name
+      subnet_resource_id  = azapi_resource.subnet.id
       source_image_reference = {
         publisher = "MicrosoftWindowsServer"
         offer     = "WindowsServer"
@@ -109,13 +106,11 @@ module "test" {
       os_type        = "Windows"
       size           = "Standard_DC2as_v5"
       backup_configuration = {
-        recovery_vault_resource_group_name = azurerm_resource_group.this.name
-        recovery_vault_name                = azurerm_recovery_services_vault.this.name
-        backup_policy_resource_id          = azurerm_backup_policy_vm.this.id
+        recovery_vault_resource_group_name = azapi_resource.resource_group.name
+        recovery_vault_name                = azapi_resource.recovery_vault.name
+        backup_policy_resource_id          = azapi_resource.backup_policy.id
       }
     }
   }
   enable_telemetry = var.enable_telemetry
-
-  depends_on = [azurerm_recovery_services_vault.this, azurerm_backup_policy_vm.this]
 }

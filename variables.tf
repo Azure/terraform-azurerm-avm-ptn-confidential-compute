@@ -165,6 +165,18 @@ DESCRIPTION
   }
   validation {
     condition = alltrue([
+      for vm in values(var.confidential_virtual_machines) : vm.backup_configuration == null ? true : try(
+        endswith(
+          lower(provider::azapi::parse_resource_id("Microsoft.RecoveryServices/vaults/backupPolicies", vm.backup_configuration.backup_policy_resource_id).parent_id),
+          lower("/resourceGroups/${vm.backup_configuration.recovery_vault_resource_group_name}/providers/Microsoft.RecoveryServices/vaults/${vm.backup_configuration.recovery_vault_name}")
+        ),
+        false
+      )
+    ])
+    error_message = "Each backup_configuration.backup_policy_resource_id must be a VM backup policy ID in the specified Recovery Services vault and resource group."
+  }
+  validation {
+    condition = alltrue([
       for vm in values(var.confidential_virtual_machines) : vm.backup_configuration == null || vm.backup_configuration.include_disk_luns == null || alltrue([
         for lun in vm.backup_configuration.include_disk_luns : contains([for disk in values(vm.data_disks) : disk.lun], lun)
       ])

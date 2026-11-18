@@ -4,8 +4,7 @@
 
 Terraform pattern module for Azure Confidential Virtual Machines.
 
-The root module composes the [confidential virtual machine submodule](modules/confidential-virtual-machine/README.md).
-It accepts a map of Linux or Windows VM definitions, applies default locations and tags, and creates:
+The root module accepts a map of Linux or Windows VM definitions, applies default locations and tags, and creates:
 
 - One network interface and confidential VM per definition.
 - Optional managed data disks and their attachments.
@@ -20,15 +19,16 @@ The [examples](examples/README.md) create their own prerequisites.
 - An authenticated Azure identity with permissions to manage the requested resources.
 - An existing resource group and subnet for each VM. The subnet must be usable by the VM's network interface.
 - A confidential-compute-compatible VM size and image available in the selected region and zone, with sufficient subscription quota.
-- An SSH public key or password for Linux; a password is required for Windows. Protect Terraform state because passwords are retained in state.
+- An SSH public key or password for Linux; a password is required for Windows. Protect Terraform state and any backups of state from earlier versions.
 - For backup, an existing compatible Recovery Services vault and VM backup policy, and permissions to configure VM protection.
   Use an Enhanced (`V2`) policy for the VM configuration in the backup-enabled example. The module associates the
   supplied policy ID; it does not create policies or upgrade Standard (`V1`) policies to Enhanced.
   For daily/weekly Enhanced policies, explicitly configure instant-restore retention shorter than vaulted retention.
 
-The current VM, networking, data-disk, and backup implementation uses the AzureRM provider.
-AzAPI is used for subscription-scoped telemetry deployments. Configure the providers in the calling Terraform root;
-this reusable module does not configure them. The legacy `/azurerm` module address is distinct from these provider requirements.
+The pattern uses the [AVM Virtual Machine module v0.22.0](https://registry.terraform.io/modules/Azure/avm-res-compute-virtualmachine/azurerm/0.22.0)
+for VMs and networking and its backup submodule for protection. AzAPI creates the managed data disks separately so their
+zones and tags remain independent of the VM's. The pattern does not require the AzureRM provider; `/azurerm` is a
+legacy Registry suffix. Configure AzAPI in your calling Terraform root.
 
 ## Usage
 
@@ -76,20 +76,70 @@ image availability for the selected example. The root module itself does not imp
   Tags may be omitted at all levels. An explicit empty disk tags map disables inheritance.
 - A supplied `private_ip_address` forces static allocation. Otherwise allocation defaults to `Dynamic`.
   No public IP address, network security group, or remote-access service is created.
+- The pattern does not request [encryption at host](https://learn.microsoft.com/azure/virtual-machines/disk-encryption#encryption-at-host---end-to-end-encryption-for-your-vm-data)
+  or require its subscription feature registration. Confidential OS disk encryption (`DiskWithVMGuestState` by default),
+  Secure Boot, and vTPM are configured separately.
 - Data-disk keys must be stable at plan time. LUNs must be unique within each VM and between 0 and 63.
   Set a data disk's zone explicitly when required; it does not inherit the VM's zone.
 - Backup include/exclude LUN sets are mutually exclusive and can reference only LUNs declared in that VM's `data_disks`.
-  Creating a protection association is not evidence that a backup or restore has completed.
+  The vault name and resource group must match the backup policy ID. Creating a protection association is not evidence
+  that a backup or restore has completed.
 - VM outputs are maps keyed by the VM input keys. Disk outputs are nested maps keyed by VM and disk keys.
   Backup outputs contain only VMs with backup configured; disk maps are empty for VMs without additional disks.
+  Disk attachment IDs retain the legacy `<vm-id>/dataDisks/<managed-disk-name>` format; they are not ARM resource IDs.
+
+## Upgrading an existing deployment
+
+The former `//modules/confidential-virtual-machine` source is no longer available. Use the root module and provide its
+required `location`. If you used the earlier nested AzAPI overrides, move fields from
+`resource_types.confidential_virtual_machine` and `ignore_body_changes.confidential_virtual_machine` into the respective
+top-level objects.
+
+Terraform does not migrate state automatically. Pause concurrent applies, securely back up the state, and test the
+upgrade outside production. Use `terraform state list` and `terraform state show` to confirm addresses and resource IDs.
+Do not apply a plan that destroys or replaces existing VMs, disks, NICs, or backup protection.
+
+### If your deployment already uses AzAPI and the AVM VM
+
+Run `terraform state mv` for the entries that exist in your state. The addresses below are relative to the pattern module.
+For example, prefix both sides with `module.confidential_compute.` if that is the module call in your Terraform root.
+Use your actual VM keys. Moving each keyed VM or backup module moves the resources it contains.
+
+| Old address | New address |
+|---|---|
+| `module.confidential_virtual_machine.module.virtual_machine["vm-key"]` | `module.virtual_machine["vm-key"]` |
+| `module.confidential_virtual_machine.module.backup["vm-key"]` | `module.backup["vm-key"]` |
+| `module.confidential_virtual_machine.azapi_resource.data_disk` | `azapi_resource.data_disk` |
+
+If present, forget the wrapper's `module.confidential_virtual_machine.azapi_resource.telemetry[0]` and
+`module.confidential_virtual_machine.terraform_data.telemetry[0]` with `terraform state rm` rather than deleting the
+Azure telemetry deployment. Do not remove root or AVM module telemetry bindings. Review the resulting plan before applying.
+
+### If your deployment still uses AzureRM
+
+The old AzureRM VM, NIC, disk, and attachment bindings cannot be moved using the table above. Keep your deployment on
+its previous revision until you have tested adoption. In an isolated test deployment, evaluate forgetting the old
+bindings without destroying the resources and importing the existing resources at these addresses. The table assumes
+your module call is named `confidential_compute`; substitute your actual module label, VM key, and disk key.
+
+| Existing object | Target address |
+|---|---|
+| Linux VM | `module.confidential_compute.module.virtual_machine["vm-key"].azapi_resource.this_linux_virtual_machine[0]` |
+| Windows VM | `module.confidential_compute.module.virtual_machine["vm-key"].azapi_resource.this_windows_virtual_machine[0]` |
+| NIC | `module.confidential_compute.module.virtual_machine["vm-key"].azapi_resource.virtualmachine_network_interfaces["primary"]` |
+| Data disk | `module.confidential_compute.azapi_resource.data_disk["vm-key:disk-key"]` |
+
+Attachments are part of the AVM-managed VM body, so there is no separate attachment to import. The AVM backup child
+looks up the existing protected item; do not delete the old protection to migrate it. Verify the plan and check for
+unintended workload changes after test adoption. The AzureRM adoption path has not been verified against live state.
 
 ## Telemetry
 
-Telemetry is enabled by default. Set `enable_telemetry = false` on the module call to disable it in both the root and child module.
+Telemetry is enabled by default. Set `enable_telemetry = false` to disable it in the entire pattern, including the AVM VM and backup modules.
 The required root `location` supplies telemetry's region even when individual VMs override their deployment region.
 Disabling telemetry does not make the root `location` optional.
 
-Both modules create an empty Azure deployment at the active subscription scope for telemetry.
+The pattern and its instrumented modules create empty Azure deployments at subscription scope for telemetry.
 The deployment identity needs `Microsoft.Resources/deployments/read`, `write`, and `delete` permissions at that scope.
 Telemetry deployment failures fail the apply. These deployments intentionally update on normal applies,
 even when the VM configuration is unchanged. See [AVM telemetry guidance](https://aka.ms/avm/telemetryinfo).
@@ -107,18 +157,18 @@ Run `avm pre-commit`, review its changes, and run `avm pr-check` only after comm
 
 The following requirements are needed by this module:
 
-- <a name="requirement_terraform"></a> [terraform](#requirement\_terraform) (~> 1.9)
+- <a name="requirement_terraform"></a> [terraform](#requirement\_terraform) (>= 1.16, < 2.0)
 
 - <a name="requirement_azapi"></a> [azapi](#requirement\_azapi) (~> 2.12)
-
-- <a name="requirement_azurerm"></a> [azurerm](#requirement\_azurerm) (~> 4.0)
 
 ## Resources
 
 The following resources are used by this module:
 
+- [azapi_resource.data_disk](https://registry.terraform.io/providers/Azure/azapi/latest/docs/resources/resource) (resource)
 - [azapi_resource.telemetry](https://registry.terraform.io/providers/Azure/azapi/latest/docs/resources/resource) (resource)
 - [terraform_data.telemetry](https://registry.terraform.io/providers/hashicorp/terraform/latest/docs/resources/data) (resource)
+- [azapi_client_config.current](https://registry.terraform.io/providers/Azure/azapi/latest/docs/data-sources/client_config) (data source)
 - [azapi_client_config.telemetry](https://registry.terraform.io/providers/Azure/azapi/latest/docs/data-sources/client_config) (data source)
 
 <!-- markdownlint-disable MD013 -->
@@ -261,11 +311,128 @@ Type: `bool`
 
 Default: `true`
 
+### <a name="input_ignore_body_changes"></a> [ignore\_body\_changes](#input\_ignore\_body\_changes)
+
+Description: Body-relative paths to ignore, using dot notation. Changes take effect only after apply.  
+Configuration for an ignored path is not sent to Azure until the path is removed.
+
+- `compute_disks` - Paths ignored on the pattern-managed data disks.
+- `compute_virtual_machines` - Per-resource paths for the AVM VM module; the field names match its `ignore_body_changes` input.
+- `recoveryservices_vaults_backupfabrics_protectioncontainers_protecteditems` - Overrides for the AVM backup child, which does not currently honor ignored paths for protected items.
+
+Type:
+
+```hcl
+object({
+    compute_disks = optional(list(string), [])
+    compute_virtual_machines = optional(object({
+      maintenance_configuration_assignments = optional(list(string), [])
+      authorization_locks                   = optional(list(string), [])
+      authorization_role_assignments        = optional(list(string), [])
+      insights_diagnostic_settings          = optional(list(string), [])
+      network_network_interfaces            = optional(list(string), [])
+      network_public_ip_addresses           = optional(list(string), [])
+      compute_disks                         = optional(list(string), [])
+      compute_virtual_machines              = optional(list(string), [])
+      devtestlab_schedules                  = optional(list(string), [])
+      recoveryservices_vaults_backupfabrics_protectioncontainers_protecteditems = optional(object({
+        recoveryservices_vaults_backupfabrics_protectioncontainers_protecteditems = optional(list(string), [])
+      }), {})
+      compute_virtual_machines_extensions = optional(object({
+        compute_virtual_machines_extensions = optional(list(string), [])
+      }), {})
+      compute_virtual_machines_run_commands = optional(object({
+        compute_virtual_machines_run_commands = optional(list(string), [])
+      }), {})
+    }), {})
+    recoveryservices_vaults_backupfabrics_protectioncontainers_protecteditems = optional(object({
+      recoveryservices_vaults_backupfabrics_protectioncontainers_protecteditems = optional(list(string), [])
+    }), {})
+  })
+```
+
+Default: `{}`
+
+### <a name="input_resource_types"></a> [resource\_types](#input\_resource\_types)
+
+Description: AzAPI resource type and API version overrides.
+
+- `compute_disks` - Resource type and API version for pattern-managed data disks.
+- `compute_virtual_machines` - Resource type and API version overrides matching the AVM VM module's `resource_types` input.
+- `recoveryservices_vaults_backupfabrics_protectioncontainers_protecteditems` - Overrides for the AVM backup child. The identically named field within this object sets the API version for protected items.
+
+Type:
+
+```hcl
+object({
+    compute_disks = optional(string, "Microsoft.Compute/disks@2025-01-02")
+    compute_virtual_machines = optional(object({
+      maintenance_configuration_assignments = optional(string)
+      compute_disks                         = optional(string)
+      compute_virtual_machines              = optional(string)
+      authorization_locks                   = optional(string)
+      authorization_role_assignments        = optional(string)
+      insights_diagnostic_settings          = optional(string)
+      network_network_interfaces            = optional(string)
+      network_public_ip_addresses           = optional(string)
+      devtestlab_schedules                  = optional(string)
+      keyvault_vaults_secrets               = optional(string)
+      recoveryservices_vaults_backupfabrics_protectioncontainers_protecteditems = optional(object({
+        recoveryservices_vaults_backupfabrics_protectioncontainers_protecteditems = optional(string)
+      }), {})
+      compute_virtual_machines_extensions = optional(object({
+        compute_virtual_machines_extensions = optional(string)
+      }), {})
+      compute_virtual_machines_run_commands = optional(object({
+        compute_virtual_machines_run_commands = optional(string)
+      }), {})
+    }), {})
+    recoveryservices_vaults_backupfabrics_protectioncontainers_protecteditems = optional(object({
+      recoveryservices_vaults_backupfabrics_protectioncontainers_protecteditems = optional(string)
+    }), {})
+  })
+```
+
+Default: `{}`
+
+### <a name="input_retry"></a> [retry](#input\_retry)
+
+Description: Optional AzAPI retry settings: `error_message_regex` matches retryable errors, `interval_seconds` is the initial interval, and `max_interval_seconds` is the maximum interval.
+
+Type:
+
+```hcl
+object({
+    error_message_regex  = optional(list(string))
+    interval_seconds     = optional(number)
+    max_interval_seconds = optional(number)
+  })
+```
+
+Default: `null`
+
 ### <a name="input_tags"></a> [tags](#input\_tags)
 
 Description: Default tags for VMs and NICs when VM-level tags are omitted. VM tags replace this map rather than merge with it. Data disks inherit VM tags unless disk-level tags are supplied. Tags may be omitted at all levels.
 
 Type: `map(string)`
+
+Default: `null`
+
+### <a name="input_timeouts"></a> [timeouts](#input\_timeouts)
+
+Description: Optional AzAPI operation timeouts as duration strings (e.g. `30m`), keyed by `create`, `read`, `update`, or `delete`.
+
+Type:
+
+```hcl
+object({
+    create = optional(string)
+    read   = optional(string)
+    update = optional(string)
+    delete = optional(string)
+  })
+```
 
 Default: `null`
 
@@ -291,7 +458,7 @@ Description: Resource names of confidential virtual machines.
 
 ### <a name="output_data_disk_attachment_resource_ids"></a> [data\_disk\_attachment\_resource\_ids](#output\_data\_disk\_attachment\_resource\_ids)
 
-Description: Resource IDs of data disk attachments for confidential virtual machines, grouped by VM key and data-disk key.
+Description: Legacy synthetic attachment IDs, in the form <vm-id>/dataDisks/<managed-disk-name>, grouped by VM and disk key. These are not independently addressable ARM resources.
 
 ### <a name="output_data_disk_resource_ids"></a> [data\_disk\_resource\_ids](#output\_data\_disk\_resource\_ids)
 
@@ -303,17 +470,23 @@ Description: Resource IDs of network interfaces created for confidential virtual
 
 ### <a name="output_system_assigned_identity_principal_ids"></a> [system\_assigned\_identity\_principal\_ids](#output\_system\_assigned\_identity\_principal\_ids)
 
-Description: System-assigned managed identity principal IDs keyed by VM key. Only meaningful for VMs with a system-assigned identity.
+Description: System-assigned managed identity principal IDs keyed by VM key; null for VMs without a system-assigned identity.
 
 ## Modules
 
 The following Modules are called:
 
-### <a name="module_confidential_virtual_machine"></a> [confidential\_virtual\_machine](#module\_confidential\_virtual\_machine)
+### <a name="module_backup"></a> [backup](#module\_backup)
 
-Source: ./modules/confidential-virtual-machine
+Source: Azure/avm-res-compute-virtualmachine/azurerm//modules/backup
 
-Version:
+Version: 0.22.0
+
+### <a name="module_virtual_machine"></a> [virtual\_machine](#module\_virtual\_machine)
+
+Source: Azure/avm-res-compute-virtualmachine/azurerm
+
+Version: 0.22.0
 
 <!-- markdownlint-disable-next-line MD041 -->
 ## Data Collection

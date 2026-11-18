@@ -11,7 +11,9 @@ This standalone Terraform root deploys:
 - An Azure Backup protection association between the VM and that policy.
 
 The VM has no additional data disks. No public IP address or network security group is created.
-The example uses AzureRM for infrastructure; the pattern module uses AzAPI for telemetry.
+The Recovery Services vault has public network access enabled; this example does not provision a vault private endpoint.
+The example uses AzAPI for supporting infrastructure and calls the root pattern directly. The pattern uses the
+published AVM VM and backup modules for the confidential VM and its protection.
 
 ## Before deploying
 
@@ -36,6 +38,8 @@ Managed GitHub Actions checks generate a temporary password input when none is s
 The password must contain 12-123 characters and at least three of lowercase letters, uppercase letters, digits, and special characters.
 Regenerate saved plans after configuration changes. Switching an existing Linux VM to Windows requires recreation;
 review the VM and backup-protection changes before applying.
+If upgrading from the former wrapper layout, follow the [state migration guide](../../README.md#upgrading-an-existing-deployment)
+with `module.test` as the pattern's address.
 
 Protect local state and saved plans: they contain the administrator password. Use private-network connectivity to reach the VM.
 Enabling protection does not verify a completed backup or restore. Recovery points and vault soft-delete settings
@@ -43,30 +47,7 @@ can require additional cleanup before Azure permits vault deletion.
 For managed deployment and cleanup commands, see the [examples guide](../README.md).
 
 ```hcl
-terraform {
-  required_version = ">= 1.9, < 2.0"
-
-  required_providers {
-    azapi = {
-      source  = "Azure/azapi"
-      version = "~> 2.12"
-    }
-    azurerm = {
-      source  = "hashicorp/azurerm"
-      version = "~> 4.0"
-    }
-    random = {
-      source  = "hashicorp/random"
-      version = "~> 3.7"
-    }
-  }
-}
-
 provider "azapi" {}
-
-provider "azurerm" {
-  features {}
-}
 
 resource "random_string" "suffix" {
   length  = 6
@@ -81,67 +62,87 @@ module "naming" {
   version = "0.2.0"
 }
 
-resource "azurerm_resource_group" "this" {
-  location = var.location
-  name     = module.naming.names.resource_group.name_unique
+data "azapi_client_config" "current" {}
+
+resource "azapi_resource" "resource_group" {
+  location               = var.location
+  name                   = module.naming.names.resource_group.name_unique
+  parent_id              = data.azapi_client_config.current.subscription_resource_id
+  type                   = "Microsoft.Resources/resourceGroups@2024-03-01"
+  response_export_values = []
 }
 
-resource "azurerm_virtual_network" "this" {
-  location            = azurerm_resource_group.this.location
-  name                = "vnet-cvm-backup-${random_string.suffix.result}"
-  resource_group_name = azurerm_resource_group.this.name
-  address_space       = ["10.50.0.0/16"]
-
-  depends_on = [azurerm_resource_group.this]
-}
-
-resource "azurerm_subnet" "this" {
-  name                 = "snet-workload"
-  resource_group_name  = azurerm_resource_group.this.name
-  virtual_network_name = azurerm_virtual_network.this.name
-  address_prefixes     = ["10.50.1.0/24"]
-
-  depends_on = [azurerm_virtual_network.this]
-}
-
-resource "azurerm_recovery_services_vault" "this" {
-  location            = azurerm_resource_group.this.location
-  name                = "rsv-cvm-${random_string.suffix.result}"
-  resource_group_name = azurerm_resource_group.this.name
-  sku                 = "Standard"
-
-  depends_on = [azurerm_resource_group.this]
-}
-
-resource "azurerm_backup_policy_vm" "this" {
-  name                           = "daily-backup"
-  recovery_vault_name            = azurerm_recovery_services_vault.this.name
-  resource_group_name            = azurerm_resource_group.this.name
-  instant_restore_retention_days = 2
-  policy_type                    = "V2"
-  timezone                       = "UTC"
-
-  backup {
-    frequency = "Daily"
-    time      = "23:00"
+resource "azapi_resource" "virtual_network" {
+  location  = azapi_resource.resource_group.location
+  name      = "vnet-cvm-backup-${random_string.suffix.result}"
+  parent_id = azapi_resource.resource_group.id
+  type      = "Microsoft.Network/virtualNetworks@2024-05-01"
+  body = {
+    properties = { addressSpace = { addressPrefixes = ["10.50.0.0/16"] } }
   }
+  response_export_values = []
+}
 
-  retention_daily {
-    count = 7
+resource "azapi_resource" "subnet" {
+  name      = "snet-workload"
+  parent_id = azapi_resource.virtual_network.id
+  type      = "Microsoft.Network/virtualNetworks/subnets@2024-05-01"
+  body = {
+    properties = { addressPrefix = "10.50.1.0/24" }
   }
+  response_export_values = []
+}
 
-  depends_on = [azurerm_recovery_services_vault.this]
+resource "azapi_resource" "recovery_vault" {
+  location  = azapi_resource.resource_group.location
+  name      = "rsv-cvm-${random_string.suffix.result}"
+  parent_id = azapi_resource.resource_group.id
+  type      = "Microsoft.RecoveryServices/vaults@2024-04-01"
+  body = {
+    sku = { name = "Standard" }
+    properties = {
+      publicNetworkAccess = "Enabled"
+    }
+  }
+  response_export_values = []
+}
+
+resource "azapi_resource" "backup_policy" {
+  name      = "daily-backup"
+  parent_id = azapi_resource.recovery_vault.id
+  type      = "Microsoft.RecoveryServices/vaults/backupPolicies@2024-10-01"
+  body = {
+    properties = {
+      backupManagementType          = "AzureIaasVM"
+      policyType                    = "V2"
+      timeZone                      = "UTC"
+      instantRpRetentionRangeInDays = 2
+      schedulePolicy = {
+        schedulePolicyType   = "SimpleSchedulePolicyV2"
+        scheduleRunFrequency = "Daily"
+        dailySchedule        = { scheduleRunTimes = ["2018-07-30T23:00:00Z"] }
+      }
+      retentionPolicy = {
+        retentionPolicyType = "LongTermRetentionPolicy"
+        dailySchedule = {
+          retentionTimes    = ["2018-07-30T23:00:00Z"]
+          retentionDuration = { count = 7, durationType = "Days" }
+        }
+      }
+    }
+  }
+  response_export_values = []
 }
 
 module "test" {
   source = "../../"
 
-  location = azurerm_resource_group.this.location
+  location = azapi_resource.resource_group.location
   confidential_virtual_machines = {
     cvm1 = {
       name                = "cvm-backup-${random_string.suffix.result}"
-      resource_group_name = azurerm_resource_group.this.name
-      subnet_resource_id  = azurerm_subnet.this.id
+      resource_group_name = azapi_resource.resource_group.name
+      subnet_resource_id  = azapi_resource.subnet.id
       source_image_reference = {
         publisher = "MicrosoftWindowsServer"
         offer     = "WindowsServer"
@@ -154,15 +155,13 @@ module "test" {
       os_type        = "Windows"
       size           = "Standard_DC2as_v5"
       backup_configuration = {
-        recovery_vault_resource_group_name = azurerm_resource_group.this.name
-        recovery_vault_name                = azurerm_recovery_services_vault.this.name
-        backup_policy_resource_id          = azurerm_backup_policy_vm.this.id
+        recovery_vault_resource_group_name = azapi_resource.resource_group.name
+        recovery_vault_name                = azapi_resource.recovery_vault.name
+        backup_policy_resource_id          = azapi_resource.backup_policy.id
       }
     }
   }
   enable_telemetry = var.enable_telemetry
-
-  depends_on = [azurerm_recovery_services_vault.this, azurerm_backup_policy_vm.this]
 }
 ```
 
@@ -171,11 +170,9 @@ module "test" {
 
 The following requirements are needed by this module:
 
-- <a name="requirement_terraform"></a> [terraform](#requirement\_terraform) (>= 1.9, < 2.0)
+- <a name="requirement_terraform"></a> [terraform](#requirement\_terraform) (>= 1.16, < 2.0)
 
 - <a name="requirement_azapi"></a> [azapi](#requirement\_azapi) (~> 2.12)
-
-- <a name="requirement_azurerm"></a> [azurerm](#requirement\_azurerm) (~> 4.0)
 
 - <a name="requirement_random"></a> [random](#requirement\_random) (~> 3.7)
 
@@ -183,12 +180,13 @@ The following requirements are needed by this module:
 
 The following resources are used by this module:
 
-- [azurerm_backup_policy_vm.this](https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/backup_policy_vm) (resource)
-- [azurerm_recovery_services_vault.this](https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/recovery_services_vault) (resource)
-- [azurerm_resource_group.this](https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/resource_group) (resource)
-- [azurerm_subnet.this](https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/subnet) (resource)
-- [azurerm_virtual_network.this](https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/virtual_network) (resource)
+- [azapi_resource.backup_policy](https://registry.terraform.io/providers/Azure/azapi/latest/docs/resources/resource) (resource)
+- [azapi_resource.recovery_vault](https://registry.terraform.io/providers/Azure/azapi/latest/docs/resources/resource) (resource)
+- [azapi_resource.resource_group](https://registry.terraform.io/providers/Azure/azapi/latest/docs/resources/resource) (resource)
+- [azapi_resource.subnet](https://registry.terraform.io/providers/Azure/azapi/latest/docs/resources/resource) (resource)
+- [azapi_resource.virtual_network](https://registry.terraform.io/providers/Azure/azapi/latest/docs/resources/resource) (resource)
 - [random_string.suffix](https://registry.terraform.io/providers/hashicorp/random/latest/docs/resources/string) (resource)
+- [azapi_client_config.current](https://registry.terraform.io/providers/Azure/azapi/latest/docs/data-sources/client_config) (data source)
 
 <!-- markdownlint-disable MD013 -->
 ## Required Inputs

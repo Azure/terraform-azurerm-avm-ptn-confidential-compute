@@ -6,39 +6,30 @@ mock_provider "azapi" {
   }
 }
 
-mock_provider "azurerm" {}
+mock_provider "random" {}
 
-override_module {
-  target = module.confidential_virtual_machine
-  outputs = {
-    backup_protected_vm_ids = {
-      vm1 = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-test/providers/Microsoft.RecoveryServices/vaults/rsv-test/backupFabrics/Azure/protectionContainers/iaasvmcontainer;iaasvmcontainerv2;rg-test;vm-test/protectedItems/vm;iaasvmcontainerv2;rg-test;vm-test"
-    }
-    data_disk_attachment_resource_ids = {
-      vm1 = {
-        data01 = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-test/providers/Microsoft.Compute/virtualMachines/vm-test/dataDisks/0"
-      }
-    }
-    data_disk_resource_ids = {
-      vm1 = {
-        data01 = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-test/providers/Microsoft.Compute/disks/vm-test-data01"
-      }
-    }
-    network_interface_resource_ids = {
-      vm1 = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-test/providers/Microsoft.Network/networkInterfaces/vm-test-nic"
-    }
-    resource_ids = {
-      vm1 = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-test/providers/Microsoft.Compute/virtualMachines/vm-test"
-    }
-    resource_names = {
-      vm1 = "vm-test"
-    }
-    system_assigned_identity_principal_ids = {
-      vm1 = "00000000-0000-0000-0000-000000000001"
-    }
-    virtual_machine_private_ip_addresses = {
-      vm1 = "10.0.1.4"
-    }
+mock_provider "time" {}
+
+mock_provider "tls" {}
+
+override_resource {
+  target = module.virtual_machine["vm1"].azapi_resource.virtualmachine_network_interfaces["primary"]
+  values = {
+    id = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-test/providers/Microsoft.Network/networkInterfaces/vm-test-nic"
+  }
+}
+
+override_resource {
+  target = module.virtual_machine["vm1"].azapi_resource.this_linux_virtual_machine[0]
+  values = {
+    id = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-test/providers/Microsoft.Compute/virtualMachines/vm-test"
+  }
+}
+
+override_resource {
+  target = azapi_resource.data_disk["vm1:data01"]
+  values = {
+    id = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-test/providers/Microsoft.Compute/disks/vm-test-data01"
   }
 }
 
@@ -80,28 +71,24 @@ run "normalizes_defaults_and_forwards_outputs" {
   }
 
   assert {
-    condition     = local.confidential_virtual_machines.vm1.tags.environment == "unit"
-    error_message = "The root module should default VM tags from module-level tags."
-  }
-
-  assert {
-    condition     = local.telemetry_location == "eastus"
-    error_message = "telemetry_location should resolve from the module-level location."
+    condition     = azapi_resource.data_disk["vm1:data01"].tags == tomap({ environment = "unit" })
+    error_message = "A data disk must inherit module-level tags when neither the VM nor the disk overrides them."
   }
 
   assert {
     condition     = output.confidential_virtual_machine_resource_ids.vm1 == "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-test/providers/Microsoft.Compute/virtualMachines/vm-test"
-    error_message = "Root outputs should pass through submodule VM IDs."
+    error_message = "The root output must expose the AVM-managed VM ID."
   }
 
   assert {
     condition     = output.data_disk_resource_ids.vm1.data01 == "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-test/providers/Microsoft.Compute/disks/vm-test-data01"
-    error_message = "Root outputs should pass through submodule data disk IDs."
+    error_message = "The root output must expose managed disk IDs keyed by VM and disk."
   }
 
   providers = {
-    azapi   = azapi
-    azurerm = azurerm
-
+    azapi  = azapi
+    random = random
+    time   = time
+    tls    = tls
   }
 }
