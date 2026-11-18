@@ -45,38 +45,39 @@ run "uses_east_us_for_backup_example" {
     }
   }
 
+  # The example appends "-01" to the naming module output.
   override_resource {
     target = azapi_resource.resource_group
     values = {
-      id = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-abc123"
+      id = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-abc123-01"
     }
   }
 
   override_resource {
     target = azapi_resource.virtual_network
     values = {
-      id = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-abc123/providers/Microsoft.Network/virtualNetworks/vnet-cvm-backup-abc123"
+      id = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-abc123-01/providers/Microsoft.Network/virtualNetworks/vnet-cvm-backup-abc123"
     }
   }
 
   override_resource {
     target = azapi_resource.recovery_vault
     values = {
-      id = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-abc123/providers/Microsoft.RecoveryServices/vaults/rsv-cvm-abc123"
+      id = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-abc123-01/providers/Microsoft.RecoveryServices/vaults/rsv-cvm-abc123"
     }
   }
 
   override_resource {
     target = azapi_resource.subnet
     values = {
-      id = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-abc123/providers/Microsoft.Network/virtualNetworks/vnet-cvm-backup-abc123/subnets/snet-workload"
+      id = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-abc123-01/providers/Microsoft.Network/virtualNetworks/vnet-cvm-backup-abc123/subnets/snet-workload"
     }
   }
 
   override_resource {
     target = azapi_resource.backup_policy
     values = {
-      id = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-abc123/providers/Microsoft.RecoveryServices/vaults/rsv-cvm-abc123/backupPolicies/daily-backup"
+      id = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-abc123-01/providers/Microsoft.RecoveryServices/vaults/rsv-cvm-abc123/backupPolicies/daily-backup"
     }
   }
 
