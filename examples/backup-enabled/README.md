@@ -66,7 +66,7 @@ data "azapi_client_config" "current" {}
 
 resource "azapi_resource" "resource_group" {
   location               = var.location
-  name                   = module.naming.names.resource_group.name_unique
+  name                   = "${module.naming.names.resource_group.name_unique}-01"
   parent_id              = data.azapi_client_config.current.subscription_resource_id
   type                   = "Microsoft.Resources/resourceGroups@2024-03-01"
   response_export_values = []
