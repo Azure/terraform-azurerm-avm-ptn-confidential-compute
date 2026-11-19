@@ -38,6 +38,46 @@ variables {
   }
 }
 
+run "configures_data_disk_encryption" {
+  command = plan
+
+  variables {
+    confidential_virtual_machines = {
+      for key, vm in var.confidential_virtual_machines : key => merge(vm, {
+        data_disks = merge(vm.data_disks, {
+          data02 = {
+            lun                    = 1
+            disk_size_gb           = 128
+            disk_encryption_set_id = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-test/providers/Microsoft.Compute/diskEncryptionSets/des-test"
+          }
+        })
+      })
+    }
+  }
+
+  assert {
+    condition = try(azapi_resource.data_disk["vm1:data01"].body.properties.encryption == {
+      diskEncryptionSetId = tostring(null)
+      type                = "EncryptionAtRestWithPlatformKey"
+    }, false)
+    error_message = "A data disk without an encryption set must explicitly match Azure's platform-managed encryption."
+  }
+
+  assert {
+    condition = (
+      azapi_resource.data_disk["vm1:data02"].body.properties.encryption.type == "EncryptionAtRestWithCustomerKey" &&
+      azapi_resource.data_disk["vm1:data02"].body.properties.encryption.diskEncryptionSetId == var.confidential_virtual_machines["vm1"].data_disks["data02"].disk_encryption_set_id
+    )
+    error_message = "A data disk with an encryption set must use the supplied customer-managed key."
+  }
+  providers = {
+    azapi  = azapi
+    random = random
+    time   = time
+    tls    = tls
+  }
+}
+
 run "rejects_backup_policy_in_a_different_vault" {
   command = plan
 

@@ -89,9 +89,10 @@ resource "azapi_resource" "data_disk" {
         createOption = "Empty"
       }
       diskSizeGB = each.value.disk_size_gb
-      encryption = each.value.disk_encryption_set_id == null ? null : {
+      # Match the encryption object Azure returns even when no customer key is configured.
+      encryption = {
         diskEncryptionSetId = each.value.disk_encryption_set_id
-        type                = "EncryptionAtRestWithCustomerKey"
+        type                = each.value.disk_encryption_set_id == null ? "EncryptionAtRestWithPlatformKey" : "EncryptionAtRestWithCustomerKey"
       }
     }
   }
