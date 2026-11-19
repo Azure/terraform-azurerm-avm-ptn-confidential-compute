@@ -2,7 +2,8 @@
 name: PR Check
 on:
   pull_request:
-    types: ['opened', 'reopened', 'synchronize', 'labeled', 'unlabeled']
+    types: ['opened', 'reopened', 'synchronize']
+  merge_group:
   workflow_dispatch:
     inputs:
       authoringSource:
