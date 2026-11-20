@@ -1,55 +1,76 @@
-terraform {
-  required_version = ">= 1.9, < 2.0"
+provider "azapi" {}
 
-  required_providers {
-    azapi = {
-      source  = "Azure/azapi"
-      version = "~> 2.12"
-    }
-    random = {
-      source  = "hashicorp/random"
-      version = "~> 3.7"
-    }
+removed {
+  from = azurerm_resource_group.this
+
+  lifecycle {
+    destroy = false
   }
 }
 
-provider "azapi" {}
-
-module "regions" {
-  source  = "Azure/avm-utl-regions/azurerm"
-  version = "0.13.0"
+module "resource_group" {
+  source  = "Azure/avm-res-resources-resourcegroup/azurerm"
+  version = "0.5.0"
 
   location         = var.location
+  name             = var.resource_group_name
   enable_telemetry = var.enable_telemetry
-  is_recommended   = true
 }
 
-resource "random_integer" "region_index" {
-  max = length(module.regions.regions) - 1
-  min = 0
+resource "azapi_resource" "virtual_network" {
+  location  = module.resource_group.location
+  name      = "vnet-cvm-01"
+  parent_id = module.resource_group.resource_id
+  type      = "Microsoft.Network/virtualNetworks@2024-05-01"
+  body = {
+    properties = {
+      addressSpace = { addressPrefixes = ["10.40.0.0/16"] }
+    }
+  }
+  response_export_values = []
 }
 
-module "naming" {
-  source  = "Azure/avm-utl-naming/azure"
-  version = "0.2.0"
-}
-
-data "azapi_client_config" "current" {}
-
-resource "azapi_resource" "resource_group" {
-  location               = module.regions.regions[random_integer.region_index.result].name
-  name                   = module.naming.names.resource_group.name_unique
-  parent_id              = "/subscriptions/${data.azapi_client_config.current.subscription_id}"
-  type                   = "Microsoft.Resources/resourceGroups@2024-11-01"
+resource "azapi_resource" "subnet" {
+  name      = "snet-workload"
+  parent_id = azapi_resource.virtual_network.id
+  type      = "Microsoft.Network/virtualNetworks/subnets@2024-05-01"
+  body = {
+    properties = { addressPrefix = "10.40.1.0/24" }
+  }
   response_export_values = []
 }
 
 module "test" {
   source = "../../"
 
-  address_space    = ["10.0.0.0/16"]
-  location         = azapi_resource.resource_group.location
-  name             = module.naming.names.virtual_network.name_unique
-  parent_id        = azapi_resource.resource_group.id
+  location = module.resource_group.location
+  confidential_virtual_machines = {
+    cvm1 = {
+      name                = "test"
+      resource_group_name = module.resource_group.name
+      subnet_resource_id  = azapi_resource.subnet.id
+      source_image_reference = {
+        publisher = "MicrosoftWindowsServer"
+        offer     = "WindowsServer"
+        sku       = "2025-datacenter-g2"
+        version   = "latest"
+      }
+      admin_username = "azureuser"
+      admin_password = var.admin_password
+      computer_name  = "test"
+      os_type        = "Windows"
+      size           = "Standard_DC2ads_v5"
+      data_disks = {
+        data01 = {
+          lun                  = 0
+          disk_size_gb         = 128
+          storage_account_type = "Premium_LRS"
+          caching              = "ReadWrite"
+        }
+      }
+    }
+  }
   enable_telemetry = var.enable_telemetry
+
+  depends_on = [module.resource_group]
 }
