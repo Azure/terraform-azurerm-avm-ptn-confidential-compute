@@ -1,6 +1,4 @@
-data "azapi_client_config" "current" {
-  count = length(local.confidential_virtual_machines) == 0 ? 0 : 1
-}
+data "azapi_client_config" "current" {}
 
 module "virtual_machine" {
   source   = "Azure/avm-res-compute-virtualmachine/azurerm"

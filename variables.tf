@@ -59,7 +59,6 @@ variable "confidential_virtual_machines" {
       secure_vm_disk_encryption_set_id = optional(string, null)
     }), {})
   }))
-  default     = {}
   description = <<DESCRIPTION
 Map of confidential virtual machine definitions for the pattern.
 
@@ -115,6 +114,10 @@ Keys identify VM instances and must be known at plan time. Values are objects:
 DESCRIPTION
   nullable    = false
 
+  validation {
+    condition     = length(var.confidential_virtual_machines) > 0
+    error_message = "confidential_virtual_machines must contain at least one virtual machine."
+  }
   validation {
     condition = alltrue([
       for vm in values(var.confidential_virtual_machines) : vm.location != null || var.location != null

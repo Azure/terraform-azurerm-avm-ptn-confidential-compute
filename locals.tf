@@ -7,7 +7,7 @@ locals {
   }
 
   vm_resource_group_ids = {
-    for key, vm in local.confidential_virtual_machines : key => "${one(data.azapi_client_config.current).subscription_resource_id}/resourceGroups/${vm.resource_group_name}"
+    for key, vm in local.confidential_virtual_machines : key => "${data.azapi_client_config.current.subscription_resource_id}/resourceGroups/${vm.resource_group_name}"
   }
   identity_types = {
     for key, vm in local.confidential_virtual_machines : key => split(",", replace(coalesce(vm.identity_type, "None"), " ", ""))

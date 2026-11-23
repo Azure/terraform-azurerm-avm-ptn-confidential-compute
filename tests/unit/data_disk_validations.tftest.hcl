@@ -38,6 +38,22 @@ variables {
   }
 }
 
+run "rejects_empty_virtual_machine_map" {
+  command = plan
+
+  variables {
+    confidential_virtual_machines = {}
+  }
+
+  expect_failures = [var.confidential_virtual_machines]
+  providers = {
+    azapi  = azapi
+    random = random
+    time   = time
+    tls    = tls
+  }
+}
+
 run "configures_data_disk_encryption" {
   command = plan
 
