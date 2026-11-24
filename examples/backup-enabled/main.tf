@@ -63,9 +63,9 @@ resource "azapi_update_resource" "backup_config" {
   parent_id = azapi_resource.recovery_vault.id
   type      = "Microsoft.RecoveryServices/vaults/backupconfig@2024-04-01"
   body = {
-    properties = {
-      softDeleteFeatureState = "Disabled"
-    }
+    # properties = {
+    #   softDeleteFeatureState = "Disabled"
+    # }
   }
   response_export_values = []
 }
