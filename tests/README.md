@@ -8,6 +8,7 @@ Import-Module Avm.Authoring
 avm test
 avm test unit
 pwsh -NoProfile -File .\tests\ci_admin_password.tests.ps1
+pwsh -NoProfile -File .\tests\unit\backup_retention.tests.ps1
 ```
 
 ## Unit coverage
@@ -25,7 +26,8 @@ Provider-mocked Terraform tests live in [unit](unit/):
   backup selection of undeclared LUNs, a policy ID pointing to a different vault, and invalid or empty identity types.
   Verifies that omitted identity types and explicit `None` disable identity, and checks system-assigned identities,
   user-assigned identities, and both combined orderings.
-- [Defaults and outputs](unit/defaults_and_outputs.tftest.hcl): Root region and tag defaults and VM and managed disk IDs.
+- [Defaults and outputs](unit/defaults_and_outputs.tftest.hcl): Root region and tag defaults, VM and managed disk IDs,
+  default backup retention, and explicit deletion opt-in before removing backup configuration.
 - [Telemetry location](unit/telemetry_location_validation.tftest.hcl): The required root region supplies VM defaults
   and telemetry; VM region overrides do not change telemetry's region.
 - [Windows VM and default example](unit/windows.tftest.hcl): Exercises the Windows confidential security profile and
@@ -34,10 +36,22 @@ Provider-mocked Terraform tests live in [unit](unit/):
 Mocked `apply` does not deploy Azure resources, prove regional SKU
 availability or quota, or verify backup and restore.
 
+The backup-example test expects soft delete to be explicitly disabled for disposable teardown. That property is
+currently commented out in the example, so its soft-delete assertion does not match the configuration.
+See the [backup cleanup warning](../examples/backup-enabled/README.md#cleanup-and-data-loss).
+
+## PowerShell regression tests
+
 The [CI password hook tests](ci_admin_password.tests.ps1) exercise both examples without Azure.
 They verify local no-op behavior, preservation of supplied passwords, valid generated passwords without console output,
-stable inputs across repeated preparation, cleanup, and regeneration after cleanup. Run this PowerShell suite
-separately from `avm test unit`, which discovers only the Terraform tests.
+stable inputs across repeated preparation, cleanup, and regeneration after cleanup.
+
+The [backup retention request tests](unit/backup_retention.tests.ps1) inspect mocked Terraform plans and state to verify
+stop-and-retain versus delete-on-destroy requests, including the backup example's explicit deletion opt-in.
+Run `avm test unit` first to initialize the managed Terraform toolchain. This script reruns the defaults/output and
+backup-example Terraform tests, so failures in either also fail the script.
+
+Run both PowerShell suites separately from `avm test unit`, which discovers only `*.tftest.hcl` tests.
 
 ## Other test tiers
 

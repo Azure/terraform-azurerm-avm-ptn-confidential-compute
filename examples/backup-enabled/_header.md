@@ -44,19 +44,22 @@ Enabling protection does not verify a completed backup or restore.
 
 ## Cleanup and data loss
 
-This example creates disposable test infrastructure. It explicitly sets `retain_backup_data_on_destroy = false`
-and disables soft delete on its own Recovery Services vault so managed E2E teardown can delete the backup item
-and then the vault.
-Soft delete is configured after vault creation through the
-[Azure Backup configuration API](https://learn.microsoft.com/rest/api/backup/backup-resource-vault-configs/put?view=rest-backup-2024-04-01),
-before backup protection is enabled.
+This example creates disposable test infrastructure and explicitly sets `retain_backup_data_on_destroy = false`.
+Destroy therefore requests deletion of backup data rather than stopping protection and retaining recovery points.
+The reusable pattern module defaults this setting to `true`.
 
-**Destroying this example permanently deletes its backup data. Do not use these cleanup settings for production backups.**
-The reusable pattern module still defaults `retain_backup_data_on_destroy` to `true`; no confidential VM security
-settings are relaxed. For production, retain recovery points in an independently managed vault with soft delete enabled.
-Azure cannot delete a vault while it contains retained or soft-deleted backup items; see the
+**Soft delete is not explicitly disabled by the current example.** The `backup_config` update in [main.tf](main.tf)
+has an empty body; its `softDeleteFeatureState = "Disabled"` property is commented out. Check the vault's actual
+soft-delete settings rather than assuming this example overrides them. A delete request can leave soft-deleted
+backup items, preventing immediate vault deletion and causing managed E2E cleanup to fail.
+
+**Destroying this example requests backup data deletion. Do not use these cleanup settings for production backups.**
+For production, retain recovery points in an independently managed vault with soft delete enabled.
+Azure cannot delete a vault while it contains retained or soft-deleted backup items; follow the
 [vault deletion requirements](https://learn.microsoft.com/azure/backup/backup-azure-delete-vault).
+Inspect any remaining backup items, vault, and resource group after cleanup failures; remaining resources can incur charges.
 
-For an existing deployment, apply the cleanup settings while backup protection is still in Terraform state,
-before destroying it. Changing configuration cannot retroactively change an already executed destroy request.
+For an existing deployment, apply any change to `retain_backup_data_on_destroy` while backup protection is still
+in Terraform state, before removing its configuration or destroying it. Changing configuration cannot retroactively
+change an already executed destroy request.
 For managed deployment and cleanup commands, see the [examples guide](../README.md).
