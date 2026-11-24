@@ -96,8 +96,18 @@ run "uses_east_us_for_backup_example" {
   }
 
   assert {
-    condition     = try(azapi_resource.recovery_vault.body.properties.securitySettings.softDeleteSettings.softDeleteState, null) == "Disabled"
-    error_message = "The disposable backup example must disable vault soft delete so E2E teardown can delete its backup data and vault."
+    condition = (
+      azapi_update_resource.backup_config.type == "Microsoft.RecoveryServices/vaults/backupconfig@2024-04-01" &&
+      azapi_update_resource.backup_config.name == "vaultconfig" &&
+      azapi_update_resource.backup_config.parent_id == azapi_resource.recovery_vault.id &&
+      azapi_update_resource.backup_config.body.properties.softDeleteFeatureState == "Disabled"
+    )
+    error_message = "The disposable backup example must disable soft delete through the created vault's backupconfig/vaultconfig endpoint."
+  }
+
+  assert {
+    condition     = !can(azapi_resource.recovery_vault.body.properties.securitySettings.softDeleteSettings.softDeleteState)
+    error_message = "The vault create request must not also manage the soft-delete setting owned by the post-create backup configuration."
   }
 
   assert {

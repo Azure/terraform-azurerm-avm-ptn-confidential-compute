@@ -49,6 +49,9 @@ Enabling protection does not verify a completed backup or restore.
 This example creates disposable test infrastructure. It explicitly sets `retain_backup_data_on_destroy = false`
 and disables soft delete on its own Recovery Services vault so managed E2E teardown can delete the backup item
 and then the vault.
+Soft delete is configured after vault creation through the
+[Azure Backup configuration API](https://learn.microsoft.com/rest/api/backup/backup-resource-vault-configs/put?view=rest-backup-2024-04-01),
+before backup protection is enabled.
 
 **Destroying this example permanently deletes its backup data. Do not use these cleanup settings for production backups.**
 The reusable pattern module still defaults `retain_backup_data_on_destroy` to `true`; no confidential VM security
@@ -116,11 +119,18 @@ resource "azapi_resource" "recovery_vault" {
     sku = { name = "Standard" }
     properties = {
       publicNetworkAccess = "Enabled"
-      securitySettings = {
-        softDeleteSettings = {
-          softDeleteState = "Disabled"
-        }
-      }
+    }
+  }
+  response_export_values = []
+}
+
+resource "azapi_update_resource" "backup_config" {
+  name      = "vaultconfig"
+  parent_id = azapi_resource.recovery_vault.id
+  type      = "Microsoft.RecoveryServices/vaults/backupconfig@2024-04-01"
+  body = {
+    properties = {
+      softDeleteFeatureState = "Disabled"
     }
   }
   response_export_values = []
@@ -151,6 +161,9 @@ resource "azapi_resource" "backup_policy" {
     }
   }
   response_export_values = []
+
+  # Protection must wait for the vault's post-create soft-delete configuration.
+  depends_on = [azapi_update_resource.backup_config]
 }
 
 module "test" {
@@ -205,6 +218,7 @@ The following resources are used by this module:
 - [azapi_resource.resource_group](https://registry.terraform.io/providers/Azure/azapi/latest/docs/resources/resource) (resource)
 - [azapi_resource.subnet](https://registry.terraform.io/providers/Azure/azapi/latest/docs/resources/resource) (resource)
 - [azapi_resource.virtual_network](https://registry.terraform.io/providers/Azure/azapi/latest/docs/resources/resource) (resource)
+- [azapi_update_resource.backup_config](https://registry.terraform.io/providers/Azure/azapi/latest/docs/resources/update_resource) (resource)
 - [random_string.suffix](https://registry.terraform.io/providers/hashicorp/random/latest/docs/resources/string) (resource)
 - [azapi_client_config.current](https://registry.terraform.io/providers/Azure/azapi/latest/docs/data-sources/client_config) (data source)
 

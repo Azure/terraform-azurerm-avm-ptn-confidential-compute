@@ -53,11 +53,18 @@ resource "azapi_resource" "recovery_vault" {
     sku = { name = "Standard" }
     properties = {
       publicNetworkAccess = "Enabled"
-      securitySettings = {
-        softDeleteSettings = {
-          softDeleteState = "Disabled"
-        }
-      }
+    }
+  }
+  response_export_values = []
+}
+
+resource "azapi_update_resource" "backup_config" {
+  name      = "vaultconfig"
+  parent_id = azapi_resource.recovery_vault.id
+  type      = "Microsoft.RecoveryServices/vaults/backupconfig@2024-04-01"
+  body = {
+    properties = {
+      softDeleteFeatureState = "Disabled"
     }
   }
   response_export_values = []
@@ -88,6 +95,9 @@ resource "azapi_resource" "backup_policy" {
     }
   }
   response_export_values = []
+
+  # Protection must wait for the vault's post-create soft-delete configuration.
+  depends_on = [azapi_update_resource.backup_config]
 }
 
 module "test" {

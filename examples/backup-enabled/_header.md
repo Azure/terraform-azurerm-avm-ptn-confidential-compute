@@ -47,6 +47,9 @@ Enabling protection does not verify a completed backup or restore.
 This example creates disposable test infrastructure. It explicitly sets `retain_backup_data_on_destroy = false`
 and disables soft delete on its own Recovery Services vault so managed E2E teardown can delete the backup item
 and then the vault.
+Soft delete is configured after vault creation through the
+[Azure Backup configuration API](https://learn.microsoft.com/rest/api/backup/backup-resource-vault-configs/put?view=rest-backup-2024-04-01),
+before backup protection is enabled.
 
 **Destroying this example permanently deletes its backup data. Do not use these cleanup settings for production backups.**
 The reusable pattern module still defaults `retain_backup_data_on_destroy` to `true`; no confidential VM security
