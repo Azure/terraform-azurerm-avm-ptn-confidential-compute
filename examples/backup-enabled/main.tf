@@ -58,16 +58,18 @@ resource "azapi_resource" "recovery_vault" {
   response_export_values = []
 }
 
-resource "azapi_update_resource" "backup_config" {
-  name      = "vaultconfig"
-  parent_id = azapi_resource.recovery_vault.id
-  type      = "Microsoft.RecoveryServices/vaults/backupconfig@2024-04-01"
-  body = {
-    # properties = {
-    #   softDeleteFeatureState = "Disabled"
-    # }
+data "azapi_resource" "backup_config" {
+  name                   = "vaultconfig"
+  parent_id              = azapi_resource.recovery_vault.id
+  type                   = "Microsoft.RecoveryServices/vaults/backupconfig@2024-04-01"
+  response_export_values = ["properties.softDeleteFeatureState"]
+
+  lifecycle {
+    postcondition {
+      condition     = try(contains(["Enabled", "AlwaysON"], self.output.properties.softDeleteFeatureState), false)
+      error_message = "The backup example requires vault soft delete to be Enabled or AlwaysON. Re-enable it on existing vaults before applying."
+    }
   }
-  response_export_values = []
 }
 
 resource "azapi_resource" "backup_policy" {
@@ -96,8 +98,8 @@ resource "azapi_resource" "backup_policy" {
   }
   response_export_values = []
 
-  # Protection must wait for the vault's post-create soft-delete configuration.
-  depends_on = [azapi_update_resource.backup_config]
+  # Verify vault soft delete before enabling backup protection.
+  depends_on = [data.azapi_resource.backup_config]
 }
 
 module "test" {

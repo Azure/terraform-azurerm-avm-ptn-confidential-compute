@@ -33,7 +33,7 @@ Inspect cleanup failures and remaining resources rather than assuming a failed t
 Running `avm test e2e` without `--example` selects both examples sequentially.
 The default example manages and destroys its resource group during cleanup; do not use a group containing unrelated resources.
 
-The backup-enabled example requests backup data deletion on destroy, but does not explicitly disable vault soft delete.
+The backup-enabled example requests backup data deletion on destroy and verifies that vault soft delete remains enabled.
 Read its [cleanup and data-loss guidance](backup-enabled/README.md#cleanup-and-data-loss) before running E2E:
 retained or soft-deleted backup items can prevent vault deletion.
 

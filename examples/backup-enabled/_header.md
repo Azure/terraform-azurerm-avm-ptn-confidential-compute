@@ -48,10 +48,13 @@ This example creates disposable test infrastructure and explicitly sets `retain_
 Destroy therefore requests deletion of backup data rather than stopping protection and retaining recovery points.
 The reusable pattern module defaults this setting to `true`.
 
-**Soft delete is not explicitly disabled by the current example.** The `backup_config` update in [main.tf](main.tf)
-has an empty body; its `softDeleteFeatureState = "Disabled"` property is commented out. Check the vault's actual
-soft-delete settings rather than assuming this example overrides them. A delete request can leave soft-deleted
-backup items, preventing immediate vault deletion and causing managed E2E cleanup to fail.
+Soft delete remains enabled. After vault creation, the example reads the
+[Azure Backup configuration](https://learn.microsoft.com/rest/api/backup/backup-resource-vault-configs/get?view=rest-backup-2024-04-01)
+and requires `Enabled` or `AlwaysON` before configuring protection. It does not change soft-delete settings or bypass
+their retention period. If an earlier deployment disabled soft delete, re-enable it through your approved
+vault-management workflow before applying.
+A delete request can leave soft-deleted backup items, preventing immediate vault deletion and causing managed
+E2E cleanup to fail.
 
 **Destroying this example requests backup data deletion. Do not use these cleanup settings for production backups.**
 For production, retain recovery points in an independently managed vault with soft delete enabled.

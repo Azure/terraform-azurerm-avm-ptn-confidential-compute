@@ -36,8 +36,8 @@ Provider-mocked Terraform tests live in [unit](unit/):
 Mocked `apply` does not deploy Azure resources, prove regional SKU
 availability or quota, or verify backup and restore.
 
-The backup-example test expects soft delete to be explicitly disabled for disposable teardown. That property is
-currently commented out in the example, so its soft-delete assertion does not match the configuration.
+The backup-example tests accept soft delete states `Enabled` and `AlwaysON`, and reject `Disabled` or a missing state.
+The example reads the vault configuration without changing its soft-delete settings or bypassing retention.
 See the [backup cleanup warning](../examples/backup-enabled/README.md#cleanup-and-data-loss).
 
 ## PowerShell regression tests

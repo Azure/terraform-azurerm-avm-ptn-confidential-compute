@@ -90,6 +90,21 @@ image availability for the selected example. The root module itself does not imp
   Backup outputs contain only VMs with backup configured; disk maps are empty for VMs without additional disks.
   Disk attachment IDs retain the legacy `<vm-id>/dataDisks/<managed-disk-name>` format; they are not ARM resource IDs.
 
+### Backup retention and removal
+
+`backup_configuration.retain_backup_data_on_destroy` defaults to `true`. Removing a VM's backup configuration or
+destroying its protection stops backups and retains existing recovery points. Retained recovery points remain in
+the supplied vault and can continue to incur charges.
+
+To request backup data deletion instead, set `retain_backup_data_on_destroy = false` and apply while that VM's
+`backup_configuration` is still present. Only then remove the configuration or destroy the deployment: teardown
+uses the previously applied setting, not a value introduced in the same change that removes protection.
+
+The pattern does not change the vault's soft-delete settings. A deletion request does not guarantee immediate
+permanent removal of recovery points or permit immediate vault deletion. The
+[backup-enabled example](examples/backup-enabled/README.md#cleanup-and-data-loss) explicitly opts into deletion;
+read its cleanup limitations before deploying it. Do not use that opt-in for production backups.
+
 ## Upgrading an existing deployment
 
 The identity default is now `None` rather than `SystemAssigned`. Set each existing VM's `identity_type` to

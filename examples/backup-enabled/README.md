@@ -46,21 +46,27 @@ Enabling protection does not verify a completed backup or restore.
 
 ## Cleanup and data loss
 
-This example creates disposable test infrastructure. It explicitly sets `retain_backup_data_on_destroy = false`
-and disables soft delete on its own Recovery Services vault so managed E2E teardown can delete the backup item
-and then the vault.
-Soft delete is configured after vault creation through the
-[Azure Backup configuration API](https://learn.microsoft.com/rest/api/backup/backup-resource-vault-configs/put?view=rest-backup-2024-04-01),
-before backup protection is enabled.
+This example creates disposable test infrastructure and explicitly sets `retain_backup_data_on_destroy = false`.
+Destroy therefore requests deletion of backup data rather than stopping protection and retaining recovery points.
+The reusable pattern module defaults this setting to `true`.
 
-**Destroying this example permanently deletes its backup data. Do not use these cleanup settings for production backups.**
-The reusable pattern module still defaults `retain_backup_data_on_destroy` to `true`; no confidential VM security
-settings are relaxed. For production, retain recovery points in an independently managed vault with soft delete enabled.
-Azure cannot delete a vault while it contains retained or soft-deleted backup items; see the
+Soft delete remains enabled. After vault creation, the example reads the
+[Azure Backup configuration](https://learn.microsoft.com/rest/api/backup/backup-resource-vault-configs/get?view=rest-backup-2024-04-01)
+and requires `Enabled` or `AlwaysON` before configuring protection. It does not change soft-delete settings or bypass
+their retention period. If an earlier deployment disabled soft delete, re-enable it through your approved
+vault-management workflow before applying.
+A delete request can leave soft-deleted backup items, preventing immediate vault deletion and causing managed
+E2E cleanup to fail.
+
+**Destroying this example requests backup data deletion. Do not use these cleanup settings for production backups.**
+For production, retain recovery points in an independently managed vault with soft delete enabled.
+Azure cannot delete a vault while it contains retained or soft-deleted backup items; follow the
 [vault deletion requirements](https://learn.microsoft.com/azure/backup/backup-azure-delete-vault).
+Inspect any remaining backup items, vault, and resource group after cleanup failures; remaining resources can incur charges.
 
-For an existing deployment, apply the cleanup settings while backup protection is still in Terraform state,
-before destroying it. Changing configuration cannot retroactively change an already executed destroy request.
+For an existing deployment, apply any change to `retain_backup_data_on_destroy` while backup protection is still
+in Terraform state, before removing its configuration or destroying it. Changing configuration cannot retroactively
+change an already executed destroy request.
 For managed deployment and cleanup commands, see the [examples guide](../README.md).
 
 ```hcl
@@ -124,16 +130,18 @@ resource "azapi_resource" "recovery_vault" {
   response_export_values = []
 }
 
-resource "azapi_update_resource" "backup_config" {
-  name      = "vaultconfig"
-  parent_id = azapi_resource.recovery_vault.id
-  type      = "Microsoft.RecoveryServices/vaults/backupconfig@2024-04-01"
-  body = {
-    properties = {
-      softDeleteFeatureState = "Disabled"
+data "azapi_resource" "backup_config" {
+  name                   = "vaultconfig"
+  parent_id              = azapi_resource.recovery_vault.id
+  type                   = "Microsoft.RecoveryServices/vaults/backupconfig@2024-04-01"
+  response_export_values = ["properties.softDeleteFeatureState"]
+
+  lifecycle {
+    postcondition {
+      condition     = try(contains(["Enabled", "AlwaysON"], self.output.properties.softDeleteFeatureState), false)
+      error_message = "The backup example requires vault soft delete to be Enabled or AlwaysON. Re-enable it on existing vaults before applying."
     }
   }
-  response_export_values = []
 }
 
 resource "azapi_resource" "backup_policy" {
@@ -162,8 +170,8 @@ resource "azapi_resource" "backup_policy" {
   }
   response_export_values = []
 
-  # Protection must wait for the vault's post-create soft-delete configuration.
-  depends_on = [azapi_update_resource.backup_config]
+  # Verify vault soft delete before enabling backup protection.
+  depends_on = [data.azapi_resource.backup_config]
 }
 
 module "test" {
@@ -218,9 +226,9 @@ The following resources are used by this module:
 - [azapi_resource.resource_group](https://registry.terraform.io/providers/Azure/azapi/latest/docs/resources/resource) (resource)
 - [azapi_resource.subnet](https://registry.terraform.io/providers/Azure/azapi/latest/docs/resources/resource) (resource)
 - [azapi_resource.virtual_network](https://registry.terraform.io/providers/Azure/azapi/latest/docs/resources/resource) (resource)
-- [azapi_update_resource.backup_config](https://registry.terraform.io/providers/Azure/azapi/latest/docs/resources/update_resource) (resource)
 - [random_string.suffix](https://registry.terraform.io/providers/hashicorp/random/latest/docs/resources/string) (resource)
 - [azapi_client_config.current](https://registry.terraform.io/providers/Azure/azapi/latest/docs/data-sources/client_config) (data source)
+- [azapi_resource.backup_config](https://registry.terraform.io/providers/Azure/azapi/latest/docs/data-sources/resource) (data source)
 
 <!-- markdownlint-disable MD013 -->
 ## Required Inputs
