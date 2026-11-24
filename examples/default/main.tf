@@ -43,7 +43,6 @@ resource "azapi_resource" "subnet" {
 module "test" {
   source = "../../"
 
-  location = module.resource_group.location
   confidential_virtual_machines = {
     cvm1 = {
       name                = "test"
@@ -70,6 +69,7 @@ module "test" {
       }
     }
   }
+  location         = module.resource_group.location
   enable_telemetry = var.enable_telemetry
 
   depends_on = [module.resource_group]

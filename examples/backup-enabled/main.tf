@@ -53,6 +53,11 @@ resource "azapi_resource" "recovery_vault" {
     sku = { name = "Standard" }
     properties = {
       publicNetworkAccess = "Enabled"
+      securitySettings = {
+        softDeleteSettings = {
+          softDeleteState = "Disabled"
+        }
+      }
     }
   }
   response_export_values = []
@@ -88,7 +93,6 @@ resource "azapi_resource" "backup_policy" {
 module "test" {
   source = "../../"
 
-  location = azapi_resource.resource_group.location
   confidential_virtual_machines = {
     cvm1 = {
       name                = "cvm-backup-${random_string.suffix.result}"
@@ -109,8 +113,10 @@ module "test" {
         recovery_vault_resource_group_name = azapi_resource.resource_group.name
         recovery_vault_name                = azapi_resource.recovery_vault.name
         backup_policy_resource_id          = azapi_resource.backup_policy.id
+        retain_backup_data_on_destroy      = false
       }
     }
   }
+  location         = azapi_resource.resource_group.location
   enable_telemetry = var.enable_telemetry
 }

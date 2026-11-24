@@ -8,7 +8,8 @@ if ($tool.Status -ne 'installed') {
 
 $testDirectory = Join-Path 'tests' 'unit'
 $testFile = Join-Path $testDirectory 'defaults_and_outputs.tftest.hcl'
-$lines = @(& $tool.Path "-chdir=$root" test "-test-directory=$testDirectory" "-filter=$testFile" -no-color -json -verbose)
+$exampleTestFile = Join-Path $testDirectory 'backup_example_location.tftest.hcl'
+$lines = @(& $tool.Path "-chdir=$root" test "-test-directory=$testDirectory" "-filter=$testFile" "-filter=$exampleTestFile" -no-color -json -verbose)
 $exitCode = $LASTEXITCODE
 $events = @($lines | ForEach-Object { $_ | ConvertFrom-Json })
 if ($exitCode -ne 0) {
@@ -40,3 +41,18 @@ foreach ($case in $expected.GetEnumerator()) {
     }
 }
 Write-Output 'Backup retention destroy requests: passed'
+
+$states = @($events | Where-Object { $_.type -eq 'test_state' -and $_.'@testrun' -eq 'uses_east_us_for_backup_example' })
+if ($states.Count -ne 1) { throw 'Expected one applied state for the disposable backup example.' }
+$requests = @($states[0].test_state.root_module.child_modules |
+    Where-Object address -EQ 'module.test' |
+    ForEach-Object child_modules |
+    Where-Object address -EQ 'module.test.module.backup["cvm1"]' |
+    ForEach-Object resources |
+    Where-Object name -EQ 'backup_destroy')
+if ($requests.Count -ne 1) { throw 'Expected one backup teardown request for the disposable example.' }
+$request = $requests[0].values
+if ($request.when -ne 'destroy' -or $request.method -ne 'DELETE' -or $null -ne $request.body) {
+    throw 'The disposable backup example must persist an explicit delete-on-destroy request.'
+}
+Write-Output 'Disposable backup example destroy request: passed'

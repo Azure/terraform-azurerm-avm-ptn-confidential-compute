@@ -1,9 +1,3 @@
-variable "location" {
-  type        = string
-  description = "Required Azure region used for telemetry and as the default for VMs that omit their own location."
-  nullable    = false
-}
-
 variable "confidential_virtual_machines" {
   type = map(object({
     name                = string
@@ -229,6 +223,12 @@ DESCRIPTION
   }
 }
 
+variable "location" {
+  type        = string
+  description = "Required Azure region used for telemetry and as the default for VMs that omit their own location."
+  nullable    = false
+}
+
 variable "enable_telemetry" {
   type        = bool
   default     = true
@@ -238,12 +238,6 @@ For more information see <https://aka.ms/avm/telemetryinfo>.
 If it is set to false, then no telemetry will be collected.
 DESCRIPTION
   nullable    = false
-}
-
-variable "tags" {
-  type        = map(string)
-  default     = null
-  description = "Default tags for VMs and NICs when VM-level tags are omitted. VM tags replace this map rather than merge with it. Data disks inherit VM tags unless disk-level tags are supplied. Tags may be omitted at all levels."
 }
 
 variable "ignore_body_changes" {
@@ -332,6 +326,12 @@ variable "retry" {
   })
   default     = null
   description = "Optional AzAPI retry settings: `error_message_regex` matches retryable errors, `interval_seconds` is the initial interval, and `max_interval_seconds` is the maximum interval."
+}
+
+variable "tags" {
+  type        = map(string)
+  default     = null
+  description = "Default tags for VMs and NICs when VM-level tags are omitted. VM tags replace this map rather than merge with it. Data disks inherit VM tags unless disk-level tags are supplied. Tags may be omitted at all levels."
 }
 
 variable "timeouts" {

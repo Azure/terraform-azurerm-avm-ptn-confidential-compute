@@ -96,6 +96,11 @@ run "uses_east_us_for_backup_example" {
   }
 
   assert {
+    condition     = try(azapi_resource.recovery_vault.body.properties.securitySettings.softDeleteSettings.softDeleteState, null) == "Disabled"
+    error_message = "The disposable backup example must disable vault soft delete so E2E teardown can delete its backup data and vault."
+  }
+
+  assert {
     condition = (
       azapi_resource.backup_policy.body.properties.policyType == "V2" &&
       azapi_resource.backup_policy.body.properties.instantRpRetentionRangeInDays < azapi_resource.backup_policy.body.properties.retentionPolicy.dailySchedule.retentionDuration.count

@@ -40,6 +40,20 @@ If upgrading from the former wrapper layout, follow the [state migration guide](
 with `module.test` as the pattern's address.
 
 Protect local state and saved plans: they contain the administrator password. Use private-network connectivity to reach the VM.
-Enabling protection does not verify a completed backup or restore. Recovery points and vault soft-delete settings
-can require additional cleanup before Azure permits vault deletion.
+Enabling protection does not verify a completed backup or restore.
+
+## Cleanup and data loss
+
+This example creates disposable test infrastructure. It explicitly sets `retain_backup_data_on_destroy = false`
+and disables soft delete on its own Recovery Services vault so managed E2E teardown can delete the backup item
+and then the vault.
+
+**Destroying this example permanently deletes its backup data. Do not use these cleanup settings for production backups.**
+The reusable pattern module still defaults `retain_backup_data_on_destroy` to `true`; no confidential VM security
+settings are relaxed. For production, retain recovery points in an independently managed vault with soft delete enabled.
+Azure cannot delete a vault while it contains retained or soft-deleted backup items; see the
+[vault deletion requirements](https://learn.microsoft.com/azure/backup/backup-azure-delete-vault).
+
+For an existing deployment, apply the cleanup settings while backup protection is still in Terraform state,
+before destroying it. Changing configuration cannot retroactively change an already executed destroy request.
 For managed deployment and cleanup commands, see the [examples guide](../README.md).
