@@ -4,6 +4,12 @@ mock_provider "azapi" {
       subscription_resource_id = "/subscriptions/00000000-0000-0000-0000-000000000000"
     }
   }
+
+  mock_data "azapi_resource" {
+    defaults = {
+      exists = false
+    }
+  }
 }
 
 mock_provider "random" {}
@@ -85,6 +91,91 @@ run "normalizes_defaults_and_forwards_outputs" {
     error_message = "The root output must expose managed disk IDs keyed by VM and disk."
   }
 
+  providers = {
+    azapi  = azapi
+    random = random
+    time   = time
+    tls    = tls
+  }
+}
+
+run "retains_backup_data_by_default" {
+  command = apply
+
+  variables {
+    confidential_virtual_machines = {
+      for key, vm in var.confidential_virtual_machines : key => merge(vm, {
+        backup_configuration = {
+          recovery_vault_resource_group_name = "rg-backup"
+          recovery_vault_name                = "rsv-test"
+          backup_policy_resource_id          = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-backup/providers/Microsoft.RecoveryServices/vaults/rsv-test/backupPolicies/daily"
+        }
+      })
+    }
+  }
+
+  assert {
+    condition     = local.backup_configurations["vm1"].retain_backup_data_on_destroy
+    error_message = "Omitting retain_backup_data_on_destroy must retain recovery points when backup protection is destroyed."
+  }
+  providers = {
+    azapi  = azapi
+    random = random
+    time   = time
+    tls    = tls
+  }
+}
+
+run "removes_backup_configuration_with_retention" {
+  command = plan
+
+  assert {
+    condition     = length(module.backup) == 0 && length(output.backup_protected_vm_ids) == 0
+    error_message = "Removing backup_configuration must remove backup protection from Terraform management."
+  }
+  providers = {
+    azapi  = azapi
+    random = random
+    time   = time
+    tls    = tls
+  }
+}
+
+run "allows_explicit_backup_data_deletion" {
+  command = apply
+
+  variables {
+    confidential_virtual_machines = {
+      for key, vm in var.confidential_virtual_machines : key => merge(vm, {
+        backup_configuration = {
+          recovery_vault_resource_group_name = "rg-backup"
+          recovery_vault_name                = "rsv-test"
+          backup_policy_resource_id          = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-backup/providers/Microsoft.RecoveryServices/vaults/rsv-test/backupPolicies/daily"
+          retain_backup_data_on_destroy      = false
+        }
+      })
+    }
+  }
+
+  assert {
+    condition     = !local.backup_configurations["vm1"].retain_backup_data_on_destroy
+    error_message = "An explicit retain_backup_data_on_destroy = false must opt into deleting recovery points."
+  }
+  providers = {
+    azapi  = azapi
+    random = random
+    time   = time
+    tls    = tls
+  }
+}
+
+run "removes_backup_configuration_after_deletion_opt_in" {
+  command = plan
+
+  assert {
+    condition     = length(module.backup) == 0 && length(output.backup_protected_vm_ids) == 0
+    error_message = "Removing backup_configuration after opting into deletion must remove backup protection from Terraform management."
+  }
   providers = {
     azapi  = azapi
     random = random

@@ -116,17 +116,18 @@ module "backup" {
   version  = "0.22.0"
   for_each = local.backup_configurations
 
-  recovery_vault_resource_id = provider::azapi::parse_resource_id("Microsoft.RecoveryServices/vaults/backupPolicies", each.value.backup_policy_resource_id).parent_id
-  resource_group_name        = local.confidential_virtual_machines[each.key].resource_group_name
-  virtual_machine_name       = local.confidential_virtual_machines[each.key].name
-  virtualmachine_resource_id = module.virtual_machine[each.key].resource_id
-  backup_policy_resource_id  = each.value.backup_policy_resource_id
-  enable_telemetry           = var.enable_telemetry
-  exclude_disk_luns          = each.value.exclude_disk_luns
-  ignore_body_changes        = var.ignore_body_changes.recoveryservices_vaults_backupfabrics_protectioncontainers_protecteditems
-  include_disk_luns          = each.value.include_disk_luns
-  location                   = local.confidential_virtual_machines[each.key].location
-  resource_types             = var.resource_types.recoveryservices_vaults_backupfabrics_protectioncontainers_protecteditems
-  retry                      = var.retry
-  timeouts                   = var.timeouts
+  recovery_vault_resource_id    = provider::azapi::parse_resource_id("Microsoft.RecoveryServices/vaults/backupPolicies", each.value.backup_policy_resource_id).parent_id
+  resource_group_name           = local.confidential_virtual_machines[each.key].resource_group_name
+  virtual_machine_name          = local.confidential_virtual_machines[each.key].name
+  virtualmachine_resource_id    = module.virtual_machine[each.key].resource_id
+  backup_policy_resource_id     = each.value.backup_policy_resource_id
+  enable_telemetry              = var.enable_telemetry
+  exclude_disk_luns             = each.value.exclude_disk_luns
+  ignore_body_changes           = var.ignore_body_changes.recoveryservices_vaults_backupfabrics_protectioncontainers_protecteditems
+  include_disk_luns             = each.value.include_disk_luns
+  location                      = local.confidential_virtual_machines[each.key].location
+  resource_types                = var.resource_types.recoveryservices_vaults_backupfabrics_protectioncontainers_protecteditems
+  retain_backup_data_on_destroy = each.value.retain_backup_data_on_destroy
+  retry                         = var.retry
+  timeouts                      = var.timeouts
 }
