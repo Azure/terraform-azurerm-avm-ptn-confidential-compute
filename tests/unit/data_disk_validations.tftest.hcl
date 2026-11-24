@@ -54,6 +54,115 @@ run "rejects_empty_virtual_machine_map" {
   }
 }
 
+run "rejects_invalid_identity_type" {
+  command = plan
+
+  variables {
+    confidential_virtual_machines = merge(var.confidential_virtual_machines, {
+      invalid = merge(var.confidential_virtual_machines.vm1, {
+        name          = "vm-invalid"
+        identity_type = "systemassigned"
+        data_disks    = {}
+      })
+    })
+  }
+
+  expect_failures = [var.confidential_virtual_machines]
+  providers = {
+    azapi  = azapi
+    random = random
+    time   = time
+    tls    = tls
+  }
+}
+
+run "rejects_empty_identity_type" {
+  command = plan
+
+  variables {
+    confidential_virtual_machines = {
+      for key, vm in var.confidential_virtual_machines : key => merge(vm, {
+        identity_type = ""
+      })
+    }
+  }
+
+  expect_failures = [var.confidential_virtual_machines]
+  providers = {
+    azapi  = azapi
+    random = random
+    time   = time
+    tls    = tls
+  }
+}
+
+run "supports_identity_modes" {
+  command = plan
+
+  variables {
+    confidential_virtual_machines = {
+      for key, identity_type in {
+        default  = null
+        none     = "None"
+        system   = "SystemAssigned"
+        user     = "UserAssigned"
+        both     = "SystemAssigned, UserAssigned"
+        compact  = "SystemAssigned,UserAssigned"
+        reversed = "UserAssigned, SystemAssigned"
+        } : key => merge(var.confidential_virtual_machines.vm1, {
+          name                                = "vm-${key}"
+          user_assigned_identity_resource_ids = ["/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-test/providers/Microsoft.ManagedIdentity/userAssignedIdentities/identity-test"]
+          data_disks                          = {}
+      }, identity_type == null ? {} : { identity_type = identity_type })
+    }
+  }
+
+  assert {
+    condition = nonsensitive(alltrue([
+      for key in ["default", "none"] :
+      !contains(keys(module.virtual_machine[key].resource.body), "identity") &&
+      output.system_assigned_identity_principal_ids[key] == null
+    ]))
+    error_message = "Omitting identity_type or setting None must omit VM identity configuration even when user-assigned IDs are supplied."
+  }
+
+  assert {
+    condition = nonsensitive(
+      module.virtual_machine["system"].resource.body.identity.type == "SystemAssigned" &&
+      !contains(keys(module.virtual_machine["system"].resource.body.identity), "userAssignedIdentities")
+    )
+    error_message = "SystemAssigned must enable only a system-assigned identity."
+  }
+
+  assert {
+    condition     = nonsensitive(module.virtual_machine["user"].resource.body.identity.type == "UserAssigned")
+    error_message = "UserAssigned must not enable a system-assigned identity."
+  }
+
+  assert {
+    condition = nonsensitive(alltrue([
+      for key in ["both", "compact", "reversed"] :
+      module.virtual_machine[key].resource.body.identity.type == "SystemAssigned, UserAssigned"
+    ]))
+    error_message = "Combined identity modes must preserve both identities regardless of comma spacing or ordering."
+  }
+
+  assert {
+    condition = nonsensitive(alltrue([
+      for key in ["user", "both", "compact", "reversed"] :
+      toset(keys(module.virtual_machine[key].resource.body.identity.userAssignedIdentities)) == toset(var.confidential_virtual_machines[key].user_assigned_identity_resource_ids)
+    ]))
+    error_message = "Modes including UserAssigned must forward the supplied identity IDs to the VM."
+  }
+
+  providers = {
+    azapi  = azapi
+    random = random
+    time   = time
+    tls    = tls
+  }
+}
+
 run "configures_data_disk_encryption" {
   command = plan
 

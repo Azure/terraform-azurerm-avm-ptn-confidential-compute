@@ -21,8 +21,10 @@ Provider-mocked Terraform tests live in [unit](unit/):
 - [Disk defaults and Linux VM composition](unit/data_disk_tags.tftest.hcl): The root pattern preserves tag inheritance,
   explicit empty overrides, and disk zones independent of the VM's zone. The AVM VM receives the confidential
   security defaults and supports Linux password authentication alongside the supplied SSH key.
-- [Disk and backup validation](unit/data_disk_validations.tftest.hcl): Rejects duplicate LUNs, invalid caching modes,
-  backup selection of undeclared LUNs, and a policy ID pointing to a different vault.
+- [Disk, backup, and identity validation](unit/data_disk_validations.tftest.hcl): Rejects duplicate LUNs, invalid caching modes,
+  backup selection of undeclared LUNs, a policy ID pointing to a different vault, and invalid or empty identity types.
+  Verifies that omitted identity types and explicit `None` disable identity, and checks system-assigned identities,
+  user-assigned identities, and both combined orderings.
 - [Defaults and outputs](unit/defaults_and_outputs.tftest.hcl): Root region and tag defaults and VM and managed disk IDs.
 - [Telemetry location](unit/telemetry_location_validation.tftest.hcl): The required root region supplies VM defaults
   and telemetry; VM region overrides do not change telemetry's region.

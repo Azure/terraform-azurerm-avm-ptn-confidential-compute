@@ -30,7 +30,7 @@ variable "confidential_virtual_machines" {
     network_interface_name              = optional(string, null)
     accelerated_networking_enabled      = optional(bool, false)
     computer_name                       = optional(string, null)
-    identity_type                       = optional(string, "SystemAssigned")
+    identity_type                       = optional(string, "None")
     user_assigned_identity_resource_ids = optional(set(string), [])
     tags                                = optional(map(string), null)
     backup_configuration = optional(object({
@@ -87,7 +87,7 @@ Keys identify VM instances and must be known at plan time. Values are objects:
 - `network_interface_name` - (Optional) NIC name. Defaults to `<name>-nic`.
 - `accelerated_networking_enabled` - (Optional) Whether accelerated networking is enabled on the NIC. Defaults to `false`.
 - `computer_name` - (Optional) OS hostname; when omitted, the provider uses the VM name subject to OS naming constraints.
-- `identity_type` - (Optional) Managed identity type: `SystemAssigned`, `UserAssigned`, or `SystemAssigned, UserAssigned`. Defaults to `SystemAssigned`.
+- `identity_type` - (Optional) Case-sensitive managed identity type: `None`, `SystemAssigned`, `UserAssigned`, or `SystemAssigned, UserAssigned`. Defaults to `None`, which disables all VM identities. The combined mode accepts either order and optional spaces around the comma.
 - `user_assigned_identity_resource_ids` - (Optional) User-assigned identity IDs, only used when `identity_type` includes `UserAssigned`.
 - `tags` - (Optional) Tags applied to VM and NIC resources. If omitted, module-level `tags` is used. Maps replace rather than merge.
 - `backup_configuration` - (Optional) Azure Backup configuration:
@@ -131,6 +131,15 @@ DESCRIPTION
       for vm in values(var.confidential_virtual_machines) : contains(["linux", "windows"], lower(vm.os_type))
     ])
     error_message = "Each confidential_virtual_machines item must set os_type to either Linux or Windows."
+  }
+  validation {
+    condition = alltrue([
+      for vm in values(var.confidential_virtual_machines) : contains(
+        ["None", "SystemAssigned", "UserAssigned", "SystemAssigned,UserAssigned", "UserAssigned,SystemAssigned"],
+        replace(vm.identity_type, " ", "")
+      )
+    ])
+    error_message = "Each identity_type must be None, SystemAssigned, UserAssigned, or \"SystemAssigned, UserAssigned\" (case-sensitive)."
   }
   validation {
     condition = alltrue([

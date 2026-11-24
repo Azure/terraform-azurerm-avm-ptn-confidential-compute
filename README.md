@@ -76,6 +76,8 @@ image availability for the selected example. The root module itself does not imp
   Tags may be omitted at all levels. An explicit empty disk tags map disables inheritance.
 - A supplied `private_ip_address` forces static allocation. Otherwise allocation defaults to `Dynamic`.
   No public IP address, network security group, or remote-access service is created.
+- Managed identity is opt-in: `identity_type` defaults to `None`. Values are case-sensitive; use `SystemAssigned`,
+  `UserAssigned`, or `SystemAssigned, UserAssigned` to enable the required identities.
 - The pattern does not request [encryption at host](https://learn.microsoft.com/azure/virtual-machines/disk-encryption#encryption-at-host---end-to-end-encryption-for-your-vm-data)
   or require its subscription feature registration. Confidential OS disk encryption (`DiskWithVMGuestState` by default),
   Secure Boot, and vTPM are configured separately.
@@ -89,6 +91,9 @@ image availability for the selected example. The root module itself does not imp
   Disk attachment IDs retain the legacy `<vm-id>/dataDisks/<managed-disk-name>` format; they are not ARM resource IDs.
 
 ## Upgrading an existing deployment
+
+The identity default is now `None` rather than `SystemAssigned`. Set each existing VM's `identity_type` to
+`SystemAssigned` (or the combined mode) before applying if it must retain its system-assigned identity.
 
 The former `//modules/confidential-virtual-machine` source is no longer available. Use the root module and provide its
 required `location`. If you used the earlier nested AzAPI overrides, move fields from
@@ -176,16 +181,6 @@ The following resources are used by this module:
 
 The following input variables are required:
 
-### <a name="input_location"></a> [location](#input\_location)
-
-Description: Required Azure region used for telemetry and as the default for VMs that omit their own location.
-
-Type: `string`
-
-## Optional Inputs
-
-The following input variables are optional (have default values):
-
 ### <a name="input_confidential_virtual_machines"></a> [confidential\_virtual\_machines](#input\_confidential\_virtual\_machines)
 
 Description: Map of confidential virtual machine definitions for the pattern.
@@ -214,13 +209,14 @@ Keys identify VM instances and must be known at plan time. Values are objects:
 - `network_interface_name` - (Optional) NIC name. Defaults to `<name>-nic`.
 - `accelerated_networking_enabled` - (Optional) Whether accelerated networking is enabled on the NIC. Defaults to `false`.
 - `computer_name` - (Optional) OS hostname; when omitted, the provider uses the VM name subject to OS naming constraints.
-- `identity_type` - (Optional) Managed identity type: `SystemAssigned`, `UserAssigned`, or `SystemAssigned, UserAssigned`. Defaults to `SystemAssigned`.
+- `identity_type` - (Optional) Case-sensitive managed identity type: `None`, `SystemAssigned`, `UserAssigned`, or `SystemAssigned, UserAssigned`. Defaults to `None`, which disables all VM identities. The combined mode accepts either order and optional spaces around the comma.
 - `user_assigned_identity_resource_ids` - (Optional) User-assigned identity IDs, only used when `identity_type` includes `UserAssigned`.
 - `tags` - (Optional) Tags applied to VM and NIC resources. If omitted, module-level `tags` is used. Maps replace rather than merge.
 - `backup_configuration` - (Optional) Azure Backup configuration:
   - `recovery_vault_resource_group_name` - (Required) Resource group name of the Recovery Services vault.
   - `recovery_vault_name` - (Required) Name of the Recovery Services vault.
   - `backup_policy_resource_id` - (Required) Compatible backup policy resource ID to associate with the VM. Use an Enhanced (`V2`) policy when required by the VM configuration. For daily/weekly Enhanced policies, explicitly configure instant-restore retention shorter than vaulted retention. The module does not create or convert policies.
+  - `retain_backup_data_on_destroy` - (Optional) Stop protection and retain recovery points when backup protection is destroyed. Defaults to `true`. Set to `false` to request deletion instead. Apply this setting before removing `backup_configuration`; destroy uses the previously applied value. Retained recovery points can continue to incur charges.
   - `include_disk_luns` - (Optional) Declared data-disk LUNs to include in backup. Mutually exclusive with `exclude_disk_luns`.
   - `exclude_disk_luns` - (Optional) Declared data-disk LUNs to exclude from backup. Mutually exclusive with `include_disk_luns`.
 - `data_disks` - (Optional) Map of additional managed data disks (zero to many) created and attached to the VM:
@@ -268,13 +264,14 @@ map(object({
     network_interface_name              = optional(string, null)
     accelerated_networking_enabled      = optional(bool, false)
     computer_name                       = optional(string, null)
-    identity_type                       = optional(string, "SystemAssigned")
+    identity_type                       = optional(string, "None")
     user_assigned_identity_resource_ids = optional(set(string), [])
     tags                                = optional(map(string), null)
     backup_configuration = optional(object({
       recovery_vault_resource_group_name = string
       recovery_vault_name                = string
       backup_policy_resource_id          = string
+      retain_backup_data_on_destroy      = optional(bool, true)
       include_disk_luns                  = optional(set(number), null)
       exclude_disk_luns                  = optional(set(number), null)
     }), null)
@@ -299,7 +296,15 @@ map(object({
   }))
 ```
 
-Default: `{}`
+### <a name="input_location"></a> [location](#input\_location)
+
+Description: Required Azure region used for telemetry and as the default for VMs that omit their own location.
+
+Type: `string`
+
+## Optional Inputs
+
+The following input variables are optional (have default values):
 
 ### <a name="input_enable_telemetry"></a> [enable\_telemetry](#input\_enable\_telemetry)
 

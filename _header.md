@@ -74,6 +74,8 @@ image availability for the selected example. The root module itself does not imp
   Tags may be omitted at all levels. An explicit empty disk tags map disables inheritance.
 - A supplied `private_ip_address` forces static allocation. Otherwise allocation defaults to `Dynamic`.
   No public IP address, network security group, or remote-access service is created.
+- Managed identity is opt-in: `identity_type` defaults to `None`. Values are case-sensitive; use `SystemAssigned`,
+  `UserAssigned`, or `SystemAssigned, UserAssigned` to enable the required identities.
 - The pattern does not request [encryption at host](https://learn.microsoft.com/azure/virtual-machines/disk-encryption#encryption-at-host---end-to-end-encryption-for-your-vm-data)
   or require its subscription feature registration. Confidential OS disk encryption (`DiskWithVMGuestState` by default),
   Secure Boot, and vTPM are configured separately.
@@ -87,6 +89,9 @@ image availability for the selected example. The root module itself does not imp
   Disk attachment IDs retain the legacy `<vm-id>/dataDisks/<managed-disk-name>` format; they are not ARM resource IDs.
 
 ## Upgrading an existing deployment
+
+The identity default is now `None` rather than `SystemAssigned`. Set each existing VM's `identity_type` to
+`SystemAssigned` (or the combined mode) before applying if it must retain its system-assigned identity.
 
 The former `//modules/confidential-virtual-machine` source is no longer available. Use the root module and provide its
 required `location`. If you used the earlier nested AzAPI overrides, move fields from
